@@ -2,7 +2,7 @@ module github.com/kayac/ecspresso/v2
 
 go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.24.7
 
 require (
 	github.com/Songmu/prompter v0.5.1
