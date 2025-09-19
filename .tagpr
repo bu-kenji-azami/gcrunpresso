@@ -46,3 +46,4 @@
 	vPrefix = true
 	releaseBranch = v2
 	versionFile = -
+	release = draft
