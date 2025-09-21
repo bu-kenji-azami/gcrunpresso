@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2.6.1](https://github.com/kayac/ecspresso/compare/v2.6.0...v2.6.1) - 2025-09-21
+- Immutable release by @fujiwara in https://github.com/kayac/ecspresso/pull/878
+- add args input to run ecspresso after installation by @fujiwara in https://github.com/kayac/ecspresso/pull/880
+
 ## [v2.6.0](https://github.com/kayac/ecspresso/compare/v2.5.0...v2.6.0) - 2025-07-24
 - add retry option for better reliability by @bary822 in https://github.com/kayac/ecspresso/pull/847
 - Fix service connect configuration removal on deployment by @itkq in https://github.com/kayac/ecspresso/pull/856
