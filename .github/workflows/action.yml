@@ -91,3 +91,11 @@ jobs:
           version: v2.3.3
       - run: |
           ecspresso version 2>&1 | fgrep v2.3.3
+      - uses: kayac/ecspresso@v2-action-testing
+        with:
+          version: latest
+          args: "render config --jsonnet"
+        env:
+          AWS_REGION: ap-northeast-1
+          ECSPRESSO_LOG_FORMAT: json
+          ECSPRESSO_CONFIG: tests/ecspresso.yml

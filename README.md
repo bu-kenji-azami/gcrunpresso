@@ -78,7 +78,7 @@ Orb `fujiwara/ecspresso@2.0.2` supports `version-file: path/to/file`, which inst
 
 ### GitHub Actions
 
-Action kayac/ecspresso@v2 installs an ecspresso binary for Linux(x86_64) into /usr/local/bin. This action runs install only.
+Action kayac/ecspresso@v2 installs an ecspresso binary for Linux(x86_64) into /usr/local/bin. This action installs ecspresso. When `args` input is provided, it runs `ecspresso` with the specified arguments after installation.
 
 ```yml
 jobs:
@@ -111,6 +111,19 @@ To use the latest version of ecspresso, pass the parameter "latest".
 Note: `version: latest` is not recommended as it may cause unexpected behavior when a new version of ecspresso is released.
 
 Action `kayac/ecspresso@v2` supports `version-file: path/to/file`, which installs the ecspresso version specified in the file. This version number does not have a `v` prefix, For example `2.3.0`.
+
+### Run ecspresso after installation
+
+When the `args` input is provided, the action runs `ecspresso` with the specified arguments after installation.
+
+```yaml
+      - uses: kayac/ecspresso@v2
+        with:
+          version: latest
+          args: deploy
+        env:
+          ECSPRESSO_CONFIG: ecspresso.yml
+```
 
 ## Usage
 
