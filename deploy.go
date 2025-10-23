@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/kayac/ecspresso/v2/appspec"
@@ -31,7 +32,7 @@ type DeployOption struct {
 	Revision             int64  `help:"revision of the task definition to run when --skip-task-definition" default:"0"`
 	ForceNewDeployment   bool   `help:"force a new deployment of the service" default:"false"`
 	Wait                 bool   `help:"wait for service stable" default:"true" negatable:""`
-	WaitUntil            string `help:"Choose whether to wait for service stable or the deployment finishes. (stable|deployed)" default:"deployed" enum:"stable,deployed"`
+	WaitUntil            string `help:"Choose whether to wait for service stable or the deployment finishes. For ECS deployment controller: \"(stable|deployed)\"; For CodeDeploy deployment controller: \"codedeploy:*\", this accepts CodeDeploy lifecycle event (e.g., \"codedeploy:AfterAllowTraffic\")" default:"deployed"`
 	SuspendAutoScaling   *bool  `help:"suspend application auto-scaling attached with the ECS service"`
 	ResumeAutoScaling    *bool  `help:"resume application auto-scaling attached with the ECS service"`
 	AutoScalingMin       *int32 `help:"set minimum capacity of application auto-scaling attached with the ECS service"`
@@ -46,6 +47,19 @@ func (opt DeployOption) DryRunString() string {
 		return dryRunStr
 	}
 	return ""
+}
+
+var codedeployWaitUntilPattern = regexp.MustCompile("^codedeploy:(.+)")
+
+func (opt DeployOption) Validate() error {
+	// Validate WaitUntil option
+	// The reason this validation exists is that the `enum` directive in `DeployOption.WaitUntil` does not support wildcards
+	if opt.WaitUntil != "stable" &&
+		opt.WaitUntil != "deployed" &&
+		!codedeployWaitUntilPattern.MatchString(opt.WaitUntil) {
+		return fmt.Errorf("invalid --wait-until value: %s (expected: stable, deployed, or codedeploy:*)", opt.WaitUntil)
+	}
+	return nil
 }
 
 func (opt DeployOption) ModifyAutoScalingParams() *modifyAutoScalingParams {

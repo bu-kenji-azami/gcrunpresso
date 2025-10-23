@@ -24,6 +24,7 @@ type waitUntil string
 const (
 	waitUntilStable   waitUntil = "stable"
 	waitUntilDeployed waitUntil = "deployed"
+	// NOTE: waitUntil type also accepts a string according to "codedeploy:*" format
 )
 
 type waitFunc func(ctx context.Context, sv *Service) error
@@ -50,6 +51,10 @@ func (d *App) WaitFunc(sv *Service, confirm confirmFunc, until waitUntil) (waitF
 	if dc := sv.DeploymentController; dc != nil {
 		switch dc.Type {
 		case types.DeploymentControllerTypeCodeDeploy:
+			match := codedeployWaitUntilPattern.FindStringSubmatch(string(until))
+			if len(match) >= 2 {
+				return d.WaitForCodeDeployLifecycle(match[1]), nil
+			}
 			return d.WaitForCodeDeploy, nil
 		case types.DeploymentControllerTypeEcs:
 			switch until {
@@ -209,11 +214,10 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 	}
 }
 
-func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
-	d.LogDebug("wait for CodeDeploy")
+func (d *App) getCodeDeployDeploymentID(ctx context.Context) (string, error) {
 	dp, err := d.findDeploymentInfo(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	out, err := d.codedeploy.ListDeployments(
 		ctx,
@@ -229,13 +233,21 @@ func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
 		},
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(out.Deployments) == 0 {
-		return ErrNotFound("No deployments found in progress on CodeDeploy")
+		return "", ErrNotFound("No deployments found in progress on CodeDeploy")
 	}
 
-	dpID := out.Deployments[0]
+	return out.Deployments[0], nil
+}
+
+func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
+	d.LogDebug("wait for CodeDeploy")
+	dpID, err := d.getCodeDeployDeploymentID(ctx)
+	if err != nil {
+		return err
+	}
 	d.LogInfo("Waiting for a deployment successful ID: " + dpID)
 	go d.codeDeployProgressBar(ctx, dpID)
 
@@ -247,6 +259,78 @@ func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
 		&codedeploy.GetDeploymentInput{DeploymentId: &dpID},
 		d.Timeout(),
 	)
+}
+
+func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
+	return func(ctx context.Context, sv *Service) error {
+		d.LogDebug("wait for CodeDeploy lifecycle event: %s", targetLifecycleEvent)
+		dpID, err := d.getCodeDeployDeploymentID(ctx)
+		if err != nil {
+			return err
+		}
+		d.LogInfo("Waiting for a deployment lifecycle event: %s (ID: %s)", targetLifecycleEvent, dpID)
+
+		t := time.NewTicker(refreshInterval)
+		defer t.Stop()
+		lifecycle2Status := map[string]cdTypes.LifecycleEventStatus{}
+		targetEventFound := false
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-t.C:
+			}
+
+			target, err := d.codedeploy.GetDeploymentTarget(ctx, &codedeploy.GetDeploymentTargetInput{
+				DeploymentId: &dpID,
+				TargetId:     aws.String(d.Cluster + ":" + d.Service),
+			})
+			if err != nil {
+				d.LogWarn("%s", err.Error())
+				continue
+			}
+
+			dep := target.DeploymentTarget
+			d.LogDebug("deployment target status: %s", dep.EcsTarget.Status)
+
+			// Check lifecycle events
+			for _, ev := range dep.EcsTarget.LifecycleEvents {
+				lifecycleEvent := *ev.LifecycleEventName
+				if lifecycle2Status[lifecycleEvent] != ev.Status {
+					if ev.Status != cdTypes.LifecycleEventStatusPending {
+						d.LogInfo("%s: %s", lifecycleEvent, ev.Status)
+					}
+					lifecycle2Status[lifecycleEvent] = ev.Status
+				}
+
+				if lifecycleEvent == targetLifecycleEvent {
+					targetEventFound = true
+					switch ev.Status {
+					case cdTypes.LifecycleEventStatusSucceeded:
+						d.LogInfo("Lifecycle event %s completed successfully", targetLifecycleEvent)
+						return nil
+					case cdTypes.LifecycleEventStatusFailed:
+						return fmt.Errorf("lifecycle event %s failed", targetLifecycleEvent)
+					case cdTypes.LifecycleEventStatusSkipped:
+						d.LogInfo("Lifecycle event %s was skipped", targetLifecycleEvent)
+						return nil
+					default:
+						// NOP for "Pending", "InProgress", and "Unknown"
+					}
+				}
+			}
+
+			// Check deployment status
+			if dep.EcsTarget.Status != cdTypes.TargetStatusInProgress {
+				if !targetEventFound {
+					return fmt.Errorf("lifecycle event %s not found in deployment", targetLifecycleEvent)
+				}
+				d.LogInfo("Deployment completed but lifecycle event %s did not complete as expected", targetLifecycleEvent)
+				return nil
+			}
+		}
+	}
 }
 
 type showState struct {
