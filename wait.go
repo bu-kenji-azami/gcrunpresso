@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,10 +23,31 @@ import (
 type waitUntil string
 
 const (
-	waitUntilStable   waitUntil = "stable"
-	waitUntilDeployed waitUntil = "deployed"
-	// NOTE: waitUntil type also accepts a string according to "codedeploy:*" format
+	waitUntilStable           waitUntil = "stable"
+	waitUntilDeployed         waitUntil = "deployed"
+	waitUntilCodeDeployPrefix           = "codedeploy:"
 )
+
+func (u waitUntil) Validate() error {
+	if u == waitUntilStable || u == waitUntilDeployed {
+		return nil
+	}
+	if strings.HasPrefix(string(u), waitUntilCodeDeployPrefix) && len(u) > len(waitUntilCodeDeployPrefix) {
+		return nil
+	}
+	return fmt.Errorf("invalid waitUntil value: %s (expected: stable, deployed, or codedeploy:*)", u)
+}
+
+func (u waitUntil) forCodeDeployLifecycle() bool {
+	return strings.HasPrefix(string(u), waitUntilCodeDeployPrefix)
+}
+
+func (u waitUntil) codeDeployLifecycleEvent() string {
+	if u.forCodeDeployLifecycle() {
+		return strings.TrimPrefix(string(u), waitUntilCodeDeployPrefix)
+	}
+	return ""
+}
 
 type waitFunc func(ctx context.Context, sv *Service) error
 
@@ -51,9 +73,8 @@ func (d *App) WaitFunc(sv *Service, confirm confirmFunc, until waitUntil) (waitF
 	if dc := sv.DeploymentController; dc != nil {
 		switch dc.Type {
 		case types.DeploymentControllerTypeCodeDeploy:
-			match := codedeployWaitUntilPattern.FindStringSubmatch(string(until))
-			if len(match) >= 2 {
-				return d.WaitForCodeDeployLifecycle(match[1]), nil
+			if until.forCodeDeployLifecycle() {
+				return d.WaitForCodeDeployLifecycle(until.codeDeployLifecycleEvent()), nil
 			}
 			return d.WaitForCodeDeploy, nil
 		case types.DeploymentControllerTypeEcs:
@@ -317,6 +338,7 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 						return nil
 					default:
 						// NOP for "Pending", "InProgress", and "Unknown"
+						d.LogDebug("Lifecycle event %s is ignored", ev.Status)
 					}
 				}
 			}
