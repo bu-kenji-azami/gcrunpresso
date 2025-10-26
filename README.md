@@ -315,6 +315,8 @@ ecspresso also adds some template functions via plugins. See the [Plugins](#plug
 
 ### Rolling deployment
 
+`ecspresso deploy` performs rolling deployment by default.
+
 ```console
 $ ecspresso deploy --config ecspresso.yml
 2017/11/09 23:20:13 myService/default Starting deploy
@@ -331,6 +333,30 @@ Events:
 2017/11/09 23:20:13 myService/default Waiting for service stable...(it will take a few minutes)
 2017/11/09 23:23:23 myService/default  PRIMARY myService:4 desired:1 pending:0 running:1
 2017/11/09 23:23:29 myService/default Service is stable now. Completed!
+```
+
+`deploy` commands has many options to customize the deployment behavior. See `ecspresso deploy --help` for more details.
+
+```
+  --dry-run                              dry run
+  --tasks=-1                             desired count of tasks
+  --skip-task-definition                 skip register a new task definition
+  --revision=0                           revision of the task definition to run when --skip-task-definition
+  --force-new-deployment                 force a new deployment of the service
+  --[no-]wait                            wait for service stable
+  --wait-until="deployed"                Choose whether to wait for service stable or the deployment finishes. For
+                                         ECS deployment controller: "(stable|deployed)"; For CodeDeploy deployment
+                                         controller: "codedeploy:*", this accepts CodeDeploy lifecycle event (e.g.,
+                                         "codedeploy:AfterAllowTraffic")
+  --suspend-auto-scaling                 suspend application auto-scaling attached with the ECS service
+  --resume-auto-scaling                  resume application auto-scaling attached with the ECS service
+  --auto-scaling-min=AUTO-SCALING-MIN    set minimum capacity of application auto-scaling attached with the ECS service
+  --auto-scaling-max=AUTO-SCALING-MAX    set maximum capacity of application auto-scaling attached with the ECS service
+  --rollback-events=""                   roll back when specified events happened
+                                         (DEPLOYMENT_FAILURE,DEPLOYMENT_STOP_ON_ALARM,DEPLOYMENT_STOP_ON_REQUEST,...)
+                                         CodeDeploy only.
+  --[no-]update-service                  update service attributes by service definition
+  --latest-task-definition               deploy with the latest task definition without registering a new task definition
 ```
 
 ### Blue/Green deployment (with ECS deployment controller)
