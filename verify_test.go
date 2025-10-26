@@ -170,7 +170,7 @@ func TestVerifyOKResource(t *testing.T) {
 	color.NoColor = true
 	for _, cache := range []bool{false, true} {
 		vs := ecspresso.NewVerifyState(cache)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			r, err := vs.VerifyResource(context.TODO(), "ok resource", func(_ context.Context) error {
 				return nil
 			})
@@ -196,7 +196,7 @@ func TestVerifyNGResource(t *testing.T) {
 	color.NoColor = true
 	for _, cache := range []bool{false, true} {
 		vs := ecspresso.NewVerifyState(cache)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			r, err := vs.VerifyResource(context.TODO(), "ng resource", func(_ context.Context) error {
 				return errors.New("XXX")
 			})
@@ -225,7 +225,7 @@ func TestVerifySkipResource(t *testing.T) {
 	color.NoColor = true
 	for _, cache := range []bool{false, true} {
 		vs := ecspresso.NewVerifyState(cache)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			r, err := vs.VerifyResource(context.TODO(), "skip resource", func(_ context.Context) error {
 				return ecspresso.ErrSkipVerify("hello")
 			})
@@ -365,7 +365,7 @@ func TestVerifyWarnResource(t *testing.T) {
 	color.NoColor = true
 	for _, cache := range []bool{false, true} {
 		vs := ecspresso.NewVerifyState(cache)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			r, err := vs.VerifyResource(context.TODO(), "warn resource", func(_ context.Context) error {
 				// Simulate AWS permission error
 				mockErr := mockAPIError{code: "AccessDeniedException"}
