@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/kayac/ecspresso/v2/appspec"
@@ -49,17 +48,11 @@ func (opt DeployOption) DryRunString() string {
 	return ""
 }
 
-var codedeployWaitUntilPattern = regexp.MustCompile("^codedeploy:(.+)")
-
 func (opt DeployOption) Validate() error {
 	// Validate WaitUntil option
 	// The reason this validation exists is that the `enum` directive in `DeployOption.WaitUntil` does not support wildcards
-	if opt.WaitUntil != "stable" &&
-		opt.WaitUntil != "deployed" &&
-		!codedeployWaitUntilPattern.MatchString(opt.WaitUntil) {
-		return fmt.Errorf("invalid --wait-until value: %s (expected: stable, deployed, or codedeploy:*)", opt.WaitUntil)
-	}
-	return nil
+	u := waitUntil(opt.WaitUntil)
+	return u.Validate()
 }
 
 func (opt DeployOption) ModifyAutoScalingParams() *modifyAutoScalingParams {

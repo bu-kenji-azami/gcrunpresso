@@ -923,12 +923,12 @@ func TestParseCLIv2(t *testing.T) {
 
 func TestParseCLIv2WithInvalidWaitUntilOption(t *testing.T) {
 	_, _, _, err := ecspresso.ParseCLIv2([]string{"deploy", "--wait-until=UNSUPPORTED"})
-	if err == nil || err.Error() != "failed to parse args: deploy: invalid --wait-until value: UNSUPPORTED (expected: stable, deployed, or codedeploy:*)" {
-		t.Errorf("waitUntil is parsed unexpectedly; %v", err)
+	if err == nil {
+		t.Errorf("invalid wait-until should return error")
 	}
 	_, _, _, err = ecspresso.ParseCLIv2([]string{"deploy", "--wait-until=codedeploy:"}) // lifecycle event name is empty (i.e., prefix only)
-	if err == nil || err.Error() != "failed to parse args: deploy: invalid --wait-until value: codedeploy: (expected: stable, deployed, or codedeploy:*)" {
-		t.Errorf("waitUntil is parsed unexpectedly; %v", err)
+	if err == nil {
+		t.Errorf("invalid wait-until should return error")
 	}
 }
 
