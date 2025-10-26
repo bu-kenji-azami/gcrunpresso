@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.6.2](https://github.com/kayac/ecspresso/compare/v2.6.1...v2.6.2) - 2025-10-26
+- Add support for waiting on specific CodeDeploy lifecycle events by @moznion in https://github.com/kayac/ecspresso/pull/884
+- refactor parsing --wait-until=codedeploy: by @fujiwara in https://github.com/kayac/ecspresso/pull/886
+- all: run modernize happy by @zchee in https://github.com/kayac/ecspresso/pull/883
+
 ## [v2.6.1](https://github.com/kayac/ecspresso/compare/v2.6.0...v2.6.1) - 2025-09-21
 - Immutable release by @fujiwara in https://github.com/kayac/ecspresso/pull/878
 - add args input to run ecspresso after installation by @fujiwara in https://github.com/kayac/ecspresso/pull/880
