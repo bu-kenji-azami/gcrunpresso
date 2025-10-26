@@ -212,6 +212,24 @@ var cliTests = []struct {
 		},
 	},
 	{
+		args: []string{"deploy", "--wait-until=codedeploy:AllowTraffic"},
+		sub:  "deploy",
+		subOption: &ecspresso.DeployOption{
+			SuspendAutoScaling:   nil,
+			ResumeAutoScaling:    nil,
+			DryRun:               false,
+			DesiredCount:         ptr(int32(-1)),
+			SkipTaskDefinition:   false,
+			Revision:             0,
+			ForceNewDeployment:   false,
+			Wait:                 true,
+			WaitUntil:            "codedeploy:AllowTraffic",
+			RollbackEvents:       "",
+			UpdateService:        true,
+			LatestTaskDefinition: false,
+		},
+	},
+	{
 		args: []string{"scale", "--tasks=5"},
 		sub:  "scale",
 		subOption: &ecspresso.ScaleOption{
@@ -900,6 +918,17 @@ func TestParseCLIv2(t *testing.T) {
 				tt.fn(t, opt.ForSubCommand(sub))
 			}
 		})
+	}
+}
+
+func TestParseCLIv2WithInvalidWaitUntilOption(t *testing.T) {
+	_, _, _, err := ecspresso.ParseCLIv2([]string{"deploy", "--wait-until=UNSUPPORTED"})
+	if err == nil || err.Error() != "failed to parse args: deploy: invalid --wait-until value: UNSUPPORTED (expected: stable, deployed, or codedeploy:*)" {
+		t.Errorf("waitUntil is parsed unexpectedly; %v", err)
+	}
+	_, _, _, err = ecspresso.ParseCLIv2([]string{"deploy", "--wait-until=codedeploy:"}) // lifecycle event name is empty (i.e., prefix only)
+	if err == nil || err.Error() != "failed to parse args: deploy: invalid --wait-until value: codedeploy: (expected: stable, deployed, or codedeploy:*)" {
+		t.Errorf("waitUntil is parsed unexpectedly; %v", err)
 	}
 }
 
