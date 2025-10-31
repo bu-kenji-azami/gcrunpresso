@@ -265,7 +265,6 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		lines := serviceRevisionsSummaries(&dp)
 		revisionSummaryOutput := strings.Join(lines, "\n")
 		if revisionSummaryOutput != prevRevisionSummaryOutput {
-			d.LogInfo("----")
 			for _, line := range lines {
 				d.LogInfo("%s", line)
 			}
