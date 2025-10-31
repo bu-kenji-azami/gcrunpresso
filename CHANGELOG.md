@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2.6.3](https://github.com/kayac/ecspresso/compare/v2.6.2...v2.6.3) - 2025-10-31
+- Update aws-sdk-go-v2/service/ecs to v1.67.0 by @fujiwara in https://github.com/kayac/ecspresso/pull/889
+- show serviceRevisionsSummaries in waiting. by @fujiwara in https://github.com/kayac/ecspresso/pull/890
+
 ## [v2.6.2](https://github.com/kayac/ecspresso/compare/v2.6.1...v2.6.2) - 2025-10-26
 - Add support for waiting on specific CodeDeploy lifecycle events by @moznion in https://github.com/kayac/ecspresso/pull/884
 - refactor parsing --wait-until=codedeploy: by @fujiwara in https://github.com/kayac/ecspresso/pull/886
