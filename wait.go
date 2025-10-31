@@ -182,6 +182,45 @@ func (d *App) WaitServiceStable(ctx context.Context, sv *Service) error {
 	return nil
 }
 
+func serviceRevisionsSummaries(dp *types.ServiceDeployment) []string {
+	lines := []string{}
+	revs := []struct {
+		types.ServiceRevisionSummary
+		revType string
+	}{}
+	if dp.TargetServiceRevision != nil {
+		revs = append(revs, struct {
+			types.ServiceRevisionSummary
+			revType string
+		}{*dp.TargetServiceRevision, "TARGET"})
+	}
+
+	for _, rev := range dp.SourceServiceRevisions {
+		revs = append(revs, struct {
+			types.ServiceRevisionSummary
+			revType string
+		}{rev, "SOURCE"})
+	}
+	for _, rev := range revs {
+		if rev.RequestedProductionTrafficWeight == nil && rev.RequestedTestTrafficWeight == nil {
+			// rolling  ECS deployment without traffic shifting
+			lines = append(lines,
+				fmt.Sprintf("%s %s pending:%d running:%d",
+					rev.revType, arnToName(*rev.Arn), rev.PendingTaskCount, rev.RunningTaskCount,
+				),
+			)
+		} else {
+			lines = append(lines,
+				fmt.Sprintf("%s %s pending:%d running:%d production:%.1f%% test:%.1f%%",
+					rev.revType, arnToName(*rev.Arn), rev.PendingTaskCount, rev.RunningTaskCount,
+					aws.ToFloat64(rev.RequestedProductionTrafficWeight), aws.ToFloat64(rev.RequestedTestTrafficWeight),
+				),
+			)
+		}
+	}
+	return lines
+}
+
 func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error {
 	d.LogInfo("Waiting for service deployed...(it will take a few minutes)")
 	deployment, err := d.findActiveECSDeployment(ctx, time.Second*10)
@@ -199,6 +238,7 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 	defer tick.Stop()
 	st := &showState{lastEventAt: time.Now()}
 	var prevStatus types.ServiceDeploymentStatus
+	var prevRevisionSummaryOutput string
 	for {
 		select {
 		case <-ctx.Done():
@@ -216,21 +256,35 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		if err != nil {
 			return fmt.Errorf("failed to describe service deployments: %w", err)
 		}
-		if len(resp.ServiceDeployments) == 1 {
-			status := resp.ServiceDeployments[0].Status
-			if status != prevStatus {
-				d.LogInfo("Service deployment status: %s", status)
-				prevStatus = status
+		if len(resp.ServiceDeployments) == 0 {
+			return ErrNotFound("service deployment not found: " + deploymentArn)
+		}
+		dp := resp.ServiceDeployments[0]
+
+		// show service revision summaries
+		lines := serviceRevisionsSummaries(&dp)
+		revisionSummaryOutput := strings.Join(lines, "\n")
+		if revisionSummaryOutput != prevRevisionSummaryOutput {
+			for _, line := range lines {
+				d.LogInfo("%s", line)
 			}
-			switch status {
-			case types.ServiceDeploymentStatusSuccessful, types.ServiceDeploymentStatusRollbackSuccessful:
-				d.LogInfo("Service deployment completed %s", status)
-				return nil
-			case types.ServiceDeploymentStatusStopped, types.ServiceDeploymentStatusRollbackFailed, types.ServiceDeploymentStatusStopRequested:
-				return fmt.Errorf("Service deployment failed %s", status)
-			default:
-				d.LogDebug("Deployment %s, waiting...", status)
-			}
+			prevRevisionSummaryOutput = revisionSummaryOutput
+		}
+
+		// check deployment status
+		status := dp.Status
+		if status != prevStatus {
+			d.LogInfo("Service deployment status: %s", status)
+			prevStatus = status
+		}
+		switch status {
+		case types.ServiceDeploymentStatusSuccessful, types.ServiceDeploymentStatusRollbackSuccessful:
+			d.LogInfo("Service deployment completed %s", status)
+			return nil
+		case types.ServiceDeploymentStatusStopped, types.ServiceDeploymentStatusRollbackFailed, types.ServiceDeploymentStatusStopRequested:
+			return fmt.Errorf("Service deployment failed %s", status)
+		default:
+			d.LogDebug("Deployment %s, waiting...", status)
 		}
 	}
 }
