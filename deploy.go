@@ -259,8 +259,8 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 		in.TaskDefinition = nil
 		in.CapacityProviderStrategy = nil
 	} else {
-		if sv.DeploymentConfiguration != nil && sv.DeploymentConfiguration.Strategy == types.DeploymentStrategyBlueGreen {
-			d.LogInfo("deployment by ECS blue/green")
+		if dc := sv.DeploymentConfiguration; dc != nil {
+			d.LogInfo("deployment by ECS %s strategy", dc.Strategy)
 		} else {
 			d.LogInfo("deployment by ECS rolling update")
 		}
