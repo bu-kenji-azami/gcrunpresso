@@ -361,7 +361,7 @@ Events:
 
 ### Blue/Green deployment (with ECS deployment controller)
 
-`ecspresso deploy` supports blue/green deployment using the ECS deployment controller. Configure ecs-service-def.json as follows. For minimal settings, use can set `deploymentController.type` and `deploymentConfiguration.strategy` as shown below.
+`ecspresso deploy` supports blue/green deployment using the ECS deployment controller. Configure ecs-service-def.json as follows. For minimal settings, you can set `deploymentController.type` and `deploymentConfiguration.strategy` as shown below.
 
 ```jsonnet
 {
@@ -859,7 +859,7 @@ $ ecspresso diff
 -  "platformVersion": "1.3.0"
 +  "platformVersion": "LATEST"
  }
- 
+
 --- arn:aws:ecs:ap-northeast-1:123456789012:task-definition/ecspresso-test:202
 +++ ecs-task-def.json
 @@ -1,6 +1,10 @@
