@@ -303,6 +303,72 @@ func TestDiffServices(t *testing.T) {
 			t.Errorf("unexpected diff. has many minus diffs: %s", ds)
 		}
 	})
+
+	t.Run("when local.DeploymentConfiguration.MaximumPercent is nil, filled with default and no diff", func(t *testing.T) {
+		b.Reset()
+		local := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentConfiguration: &types.DeploymentConfiguration{
+					MinimumHealthyPercent: aws.Int32(100),
+					Strategy:              types.DeploymentStrategyRolling,
+				},
+				SchedulingStrategy: types.SchedulingStrategyReplica,
+			},
+		}
+		remote := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentConfiguration: &types.DeploymentConfiguration{
+					MaximumPercent:        aws.Int32(200),
+					MinimumHealthyPercent: aws.Int32(100),
+					Strategy:              types.DeploymentStrategyRolling,
+				},
+				SchedulingStrategy: types.SchedulingStrategyReplica,
+			},
+		}
+		diff, err := ecspresso.DiffServices(ctx, local, remote, "file", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff {
+			t.Fatalf("unexpected diff: %s", b.String())
+		}
+		if ds := b.String(); ds != "" {
+			t.Fatalf("unexpected diff output: %s", ds)
+		}
+	})
+
+	t.Run("when local.DeploymentConfiguration.MinimumHealthyPercent is nil, filled with default and no diff", func(t *testing.T) {
+		b.Reset()
+		local := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentConfiguration: &types.DeploymentConfiguration{
+					MaximumPercent: aws.Int32(200),
+					Strategy:       types.DeploymentStrategyRolling,
+				},
+				SchedulingStrategy: types.SchedulingStrategyReplica,
+			},
+		}
+		remote := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentConfiguration: &types.DeploymentConfiguration{
+					MaximumPercent:        aws.Int32(200),
+					MinimumHealthyPercent: aws.Int32(100),
+					Strategy:              types.DeploymentStrategyRolling,
+				},
+				SchedulingStrategy: types.SchedulingStrategyReplica,
+			},
+		}
+		diff, err := ecspresso.DiffServices(ctx, local, remote, "file", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff {
+			t.Fatalf("unexpected diff: %s", b.String())
+		}
+		if ds := b.String(); ds != "" {
+			t.Fatalf("unexpected diff output: %s", ds)
+		}
+	})
 }
 
 func TestDiffTaskDefs(t *testing.T) {

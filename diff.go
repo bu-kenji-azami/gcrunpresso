@@ -319,6 +319,12 @@ func ServiceDefinitionForDiff(sv *Service) *ServiceForDiff {
 			if sv.DeploymentConfiguration.Strategy == "" {
 				sv.DeploymentConfiguration.Strategy = types.DeploymentStrategyRolling
 			}
+			if sv.DeploymentConfiguration.MaximumPercent == nil {
+				sv.DeploymentConfiguration.MaximumPercent = aws.Int32(200)
+			}
+			if sv.DeploymentConfiguration.MinimumHealthyPercent == nil {
+				sv.DeploymentConfiguration.MinimumHealthyPercent = aws.Int32(100)
+			}
 			if sv.DeploymentConfiguration.BakeTimeInMinutes == nil {
 				sv.DeploymentConfiguration.BakeTimeInMinutes = aws.Int32(0)
 			}
