@@ -419,8 +419,8 @@ func (d *App) DescribeTaskStatus(ctx context.Context, task *types.Task, watchCon
 	}
 	if len(out.Failures) > 0 {
 		f := out.Failures[0]
-		d.LogInfo("Task ARN: " + *f.Arn)
-		return fmt.Errorf(*f.Reason)
+		d.LogInfo("Task ARN: %s", *f.Arn)
+		return errors.New(*f.Reason)
 	}
 
 	ts := out.Tasks[0]

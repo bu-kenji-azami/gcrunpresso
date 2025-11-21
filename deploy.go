@@ -190,8 +190,7 @@ func (d *App) UpdateServiceTasks(ctx context.Context, taskDefinitionArn string, 
 	if opt.ForceNewDeployment {
 		msg = msg + " with force new deployment"
 	}
-	msg = msg + "..."
-	d.LogInfo(msg)
+	d.LogInfo("%s...", msg)
 	d.LogJSON(in)
 
 	_, err := d.ecs.UpdateService(ctx, in)
@@ -482,7 +481,7 @@ func (d *App) createDeployment(ctx context.Context, sv *Service, taskDefinitionA
 		d.config.Region,
 	)
 	d.LogInfo("Deployment %s is created on CodeDeploy:", id)
-	d.LogInfo(u)
+	d.LogInfo("%s", u)
 
 	if isatty.IsTerminal(os.Stdout.Fd()) {
 		if err := exec.Command("open", u).Start(); err != nil {
