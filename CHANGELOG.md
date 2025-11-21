@@ -1,5 +1,14 @@
 # Changelog
 
+## [v2.6.4](https://github.com/kayac/ecspresso/compare/v2.6.3...v2.6.4) - 2025-11-21
+- Improve deployment strategy log message to support all strategies by @fujiwara in https://github.com/kayac/ecspresso/pull/891
+- fix(diff): When MaximumPercent or MinimumHealthyPercent is nil, set default by @mi-wada in https://github.com/kayac/ecspresso/pull/895
+- fix tests of #896 - Bump golang.org/x/crypto from 0.39.0 to 0.45.0 by @fujiwara in https://github.com/kayac/ecspresso/pull/900
+- Bump golang.org/x/crypto from 0.39.0 to 0.45.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/896
+- fix tiny typo: "use can set" -> "you can set" by @mi-wada in https://github.com/kayac/ecspresso/pull/893
+- doc: fix asdf command in README.md by @waneal in https://github.com/kayac/ecspresso/pull/898
+- Supports `aws login` - update to aws-sdk-go-v2 v1.40.0 by @fujiwara in https://github.com/kayac/ecspresso/pull/901
+
 ## [v2.6.3](https://github.com/kayac/ecspresso/compare/v2.6.2...v2.6.3) - 2025-10-31
 - Update aws-sdk-go-v2/service/ecs to v1.67.0 by @fujiwara in https://github.com/kayac/ecspresso/pull/889
 - show serviceRevisionsSummaries in waiting. by @fujiwara in https://github.com/kayac/ecspresso/pull/890
