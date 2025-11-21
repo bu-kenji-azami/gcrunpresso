@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -151,7 +152,7 @@ func (c *Repository) getManifests(ctx context.Context, tag string) (mediaType st
 		case http.StatusTooManyRequests:
 			lastErr = ErrPullRateLimitExceeded
 		default:
-			lastErr = fmt.Errorf(resp.Status)
+			lastErr = errors.New(resp.Status)
 		}
 	}
 	return "", nil, fmt.Errorf("failed to fetch manifests: %w", lastErr)
@@ -171,7 +172,7 @@ func (c *Repository) getImageConfig(ctx context.Context, digest string) (io.Read
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf(resp.Status)
+		return nil, errors.New(resp.Status)
 	}
 	return resp.Body, err
 }
@@ -286,7 +287,7 @@ func (c *Repository) HasImage(ctx context.Context, tag string) (bool, error) {
 		case http.StatusOK:
 			return true, nil
 		default:
-			return false, fmt.Errorf(resp.Status)
+			return false, errors.New(resp.Status)
 		}
 	}
 	return false, fmt.Errorf("aborted")

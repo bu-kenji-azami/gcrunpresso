@@ -323,7 +323,7 @@ func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
 	if err != nil {
 		return err
 	}
-	d.LogInfo("Waiting for a deployment successful ID: " + dpID)
+	d.LogInfo("Waiting for a deployment successful ID: %s", dpID)
 	go d.codeDeployProgressBar(ctx, dpID)
 
 	waiter := codedeploy.NewDeploymentSuccessfulWaiter(d.codedeploy, func(o *codedeploy.DeploymentSuccessfulWaiterOptions) {
@@ -447,7 +447,7 @@ func (d *App) showServiceStatus(ctx context.Context, st *showState) error {
 	// if the deployments are not changed, do not show the deployments.
 	if !bytes.Equal(st.deploymentsHash, hash) {
 		for _, line := range lines {
-			d.LogInfo(line)
+			d.LogInfo("%s", line)
 		}
 	}
 	st.deploymentsHash = hash
