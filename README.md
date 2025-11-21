@@ -27,7 +27,7 @@ $ asdf plugin add ecspresso
 $ asdf plugin add ecspresso https://github.com/kayac/asdf-ecspresso.git
 
 $ asdf install ecspresso 2.3.0
-$ asdf global ecspresso 2.3.0
+$ asdf set -u ecspresso 2.3.0
 ```
 
 ### aqua (macOS and Linux)
