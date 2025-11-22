@@ -51,7 +51,7 @@ func (d *App) Rollback(ctx context.Context, opt RollbackOption) error {
 	if err != nil {
 		return err
 	}
-	targetArn, err := d.FindRollbackTarget(ctx, *sv.TaskDefinition)
+	targetArn, err := d.FindRollbackTarget(ctx, aws.ToString(sv.TaskDefinition))
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (d *App) rollbackTaskDefinition(ctx context.Context, rollbackedTdArn string
 }
 
 func (d *App) RollbackServiceTasks(ctx context.Context, sv *Service, targetArn string, opt RollbackOption) (string, error) {
-	currentArn := *sv.TaskDefinition
+	currentArn := aws.ToString(sv.TaskDefinition)
 
 	d.LogInfo("Rolling back to %s %s", arnToName(targetArn), opt.DryRunString())
 	if opt.DryRun {
@@ -185,7 +185,7 @@ func (d *App) RollbackByCodeDeploy(ctx context.Context, sv *Service, targetArn s
 
 	switch currentDeployment.Status {
 	case cdTypes.DeploymentStatusSucceeded, cdTypes.DeploymentStatusFailed, cdTypes.DeploymentStatusStopped:
-		currentTdArn := *sv.TaskDefinition
+		currentTdArn := aws.ToString(sv.TaskDefinition)
 		d.LogInfo("the deployment in progress is not found, creating a new deployment with %s %s", targetArn, opt.DryRunString())
 		if opt.DryRun {
 			return currentTdArn, nil
@@ -355,7 +355,7 @@ func (d *App) findActiveECSDeployment(ctx context.Context, timeout time.Duration
 }
 
 func (d *App) rollbackActiveECSDeployment(ctx context.Context, sv *Service, deployment *types.ServiceDeploymentBrief, opt RollbackOption) (string, error) {
-	currentTaskDefinition := *sv.TaskDefinition
+	currentTaskDefinition := aws.ToString(sv.TaskDefinition)
 
 	// Stop the deployment with rollback
 	d.LogInfo("Stopping deployment %s with rollback %s", arnToName(*deployment.ServiceDeploymentArn), opt.DryRunString())

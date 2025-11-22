@@ -78,6 +78,20 @@ func (sv *Service) PrimaryDeployment() (types.Deployment, bool) {
 	})
 }
 
+func (sv *Service) getTaskDefinitionArn() (string, error) {
+	if sv.TaskDefinition != nil {
+		LogDebug("service.taskDefinition:%s resourceManagementType:%s", aws.ToString(sv.TaskDefinition), sv.ResourceManagementType)
+		return aws.ToString(sv.TaskDefinition), nil
+	} else {
+		LogDebug("service.taskDefinition is not defined resourceManagementType:%s", sv.ResourceManagementType)
+		dp, found := sv.PrimaryDeployment()
+		if !found {
+			return "", errors.New("no primary deployment found")
+		}
+		return aws.ToString(dp.TaskDefinition), nil
+	}
+}
+
 func (d *App) newServiceFromTypes(ctx context.Context, in types.Service) (*Service, error) {
 	sv := Service{
 		Service:      in,
@@ -113,6 +127,15 @@ func (d *App) newServiceFromTypes(ctx context.Context, in types.Service) (*Servi
 	if dp.VpcLatticeConfigurations != nil {
 		d.LogDebug("VpcLatticeConfigurations: %#v", dp.VpcLatticeConfigurations)
 		sv.VpcLatticeConfigurations = dp.VpcLatticeConfigurations
+	}
+
+	// Fill taskDefinition if not set
+	if sv.TaskDefinition == nil {
+		tdArn, err := sv.getTaskDefinitionArn()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task definition arn: %w", err)
+		}
+		sv.TaskDefinition = &tdArn
 	}
 
 	return &sv, nil
@@ -343,10 +366,14 @@ func (d *App) DescribeServiceStatus(ctx context.Context, events int) (*Service, 
 	if err != nil {
 		return nil, err
 	}
+	tdArn, err := s.getTaskDefinitionArn()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task definition arn: %w", err)
+	}
 	out := &DescribeServiceStatusOutput{
-		Service:        *s.ServiceName,
-		Cluster:        *s.ClusterArn,
-		TaskDefinition: *s.TaskDefinition,
+		Service:        aws.ToString(s.ServiceName),
+		Cluster:        aws.ToString(s.ClusterArn),
+		TaskDefinition: tdArn,
 		Deployments:    s.Deployments,
 		TaskSets:       s.TaskSets,
 	}

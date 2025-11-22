@@ -242,6 +242,13 @@ func svToUpdateServiceInput(sv *Service) *ecs.UpdateServiceInput {
 			Enabled: false,
 		}
 	}
+
+	// in Express Mode, cannot update some configurations
+	if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+		in.DeploymentConfiguration = nil
+		in.LoadBalancers = nil
+	}
+
 	return in
 }
 
@@ -560,12 +567,12 @@ func (d *App) taskDefinitionArnForDeploy(ctx context.Context, sv *Service, opt D
 		if opt.LatestTaskDefinition {
 			return "", ErrConflictOptions("revision and latest-task-definition are exclusive")
 		}
-		family := strings.Split(arnToName(*sv.TaskDefinition), ":")[0]
+		family := strings.Split(arnToName(aws.ToString(sv.TaskDefinition)), ":")[0]
 		return fmt.Sprintf("%s:%d", family, opt.Revision), nil
 	}
 
 	if opt.LatestTaskDefinition {
-		family := strings.Split(arnToName(*sv.TaskDefinition), ":")[0]
+		family := strings.Split(arnToName(aws.ToString(sv.TaskDefinition)), ":")[0]
 		tdArn, err := d.findLatestTaskDefinitionArn(ctx, family)
 		if err != nil {
 			return "", err
@@ -574,7 +581,7 @@ func (d *App) taskDefinitionArnForDeploy(ctx context.Context, sv *Service, opt D
 	}
 
 	if opt.SkipTaskDefinition {
-		return *sv.TaskDefinition, nil
+		return sv.getTaskDefinitionArn()
 	}
 
 	td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)

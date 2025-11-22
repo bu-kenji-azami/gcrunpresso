@@ -316,7 +316,7 @@ func (d *App) resolveTaskdefinition(ctx context.Context) (family string, revisio
 		if err != nil {
 			return "", "", err
 		}
-		tdArn := *sv.TaskDefinition
+		tdArn := aws.ToString(sv.TaskDefinition)
 		p := strings.SplitN(arnToName(tdArn), ":", 2)
 		if len(p) != 2 {
 			return "", "", fmt.Errorf("invalid task definition arn: %s", tdArn)
