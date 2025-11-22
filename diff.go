@@ -59,7 +59,10 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 			return err
 		}
 		if remoteSv != nil {
-			remoteTaskDefArn = *remoteSv.TaskDefinition
+			remoteTaskDefArn, err = remoteSv.getTaskDefinitionArn()
+			if err != nil {
+				return err
+			}
 		}
 	}
 

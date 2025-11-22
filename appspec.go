@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/kayac/ecspresso/v2/appspec"
 )
 
@@ -24,9 +25,9 @@ func (d *App) AppSpec(ctx context.Context, opt AppSpecOption) error {
 	}
 	switch opt.TaskDefinition {
 	case "current":
-		taskDefinitionArn = *sv.TaskDefinition
+		taskDefinitionArn = aws.ToString(sv.TaskDefinition)
 	case "latest":
-		family := strings.Split(arnToName(*sv.TaskDefinition), ":")[0]
+		family := strings.Split(arnToName(aws.ToString(sv.TaskDefinition)), ":")[0]
 		taskDefinitionArn, err = d.findLatestTaskDefinitionArn(ctx, family)
 		if err != nil {
 			return err

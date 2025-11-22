@@ -106,7 +106,11 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 				DeploymentGroupName: *info.DeploymentGroupName,
 			}
 		}
+	} else if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+		// Express Mode uses CANARY deployment, so requires increasing timeout
+		conf.Timeout = &Duration{Duration: DefaultTimeout * 2}
 	}
+
 	{
 		var b []byte
 		var err error
@@ -159,7 +163,10 @@ func (d *App) initServiceDefinition(ctx context.Context, opt InitOption) (*Servi
 		}
 		sv.Tags = lt.Tags
 	}
-	tdArn := *sv.TaskDefinition
+	tdArn, err := sv.getTaskDefinitionArn()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get task definition arn: %w", err)
+	}
 	treatmentServiceDefinition(sv)
 	// remove unnecessary fields
 	if b, err := MarshalJSONForAPI(sv, "del(.runningCount, .pendingCount)"); err != nil {
@@ -221,9 +228,17 @@ func treatmentServiceDefinition(sv *Service) {
 	sv.ServiceArn = nil
 	sv.RoleArn = nil
 	sv.ServiceName = nil
+	sv.CurrentServiceRevisions = nil
+	sv.CurrentServiceDeployment = nil
 
 	if sv.PropagateTags != types.PropagateTagsService && sv.PropagateTags != types.PropagateTagsTaskDefinition {
 		sv.PropagateTags = types.PropagateTagsNone
+	}
+
+	// Express Mode cannot use DeploymentConfiguration and LoadBalancers
+	if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+		sv.DeploymentConfiguration = nil
+		sv.LoadBalancers = nil
 	}
 }
 
