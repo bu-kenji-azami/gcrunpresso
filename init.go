@@ -229,6 +229,7 @@ func treatmentServiceDefinition(sv *Service) {
 	sv.RoleArn = nil
 	sv.ServiceName = nil
 	sv.CurrentServiceRevisions = nil
+	sv.CurrentServiceDeployment = nil
 
 	if sv.PropagateTags != types.PropagateTagsService && sv.PropagateTags != types.PropagateTagsTaskDefinition {
 		sv.PropagateTags = types.PropagateTagsNone
