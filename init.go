@@ -106,7 +106,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 	conf := d.config
 	if ex != nil {
 		// express
-		conf.Service = aws.ToString(ex.ServiceName)
+		conf.Service = aws.ToString(sv.ServiceName)
 		conf.TaskDefinitionPath = ""
 		conf.ServiceDefinitionPath = ""
 	} else if td != nil && sv == nil {

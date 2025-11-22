@@ -8,6 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/google/go-jsonnet/formatter"
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
+	"github.com/kylelemons/godebug/diff"
 )
 
 type ExpressGatewayService struct {
@@ -28,6 +32,10 @@ func (d *App) initExpressGatewayService(ctx context.Context, opt InitOption) (*E
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// remove fields in definition that will be set by config
+	ex.ServiceName = nil
+	ex.Cluster = nil
 
 	b, err := MarshalJSONForAPI(ex)
 	if err != nil {
@@ -63,11 +71,16 @@ func (d *App) DescribeExpressGatewayService(ctx context.Context) (*ExpressGatewa
 		return nil, nil, fmt.Errorf("failed to describe express gateway service: %w", err)
 	}
 	rex := res.Service
+	if res.Service == nil {
+		return nil, nil, ErrNotFound("express gateway service is not found")
+	}
 	if len(rex.ActiveConfigurations) == 0 {
 		return nil, nil, fmt.Errorf("express gateway service %s has no active configuration", aws.ToString(rex.ServiceName))
 	}
 	ac := rex.ActiveConfigurations[0]
 	in := &ecs.CreateExpressGatewayServiceInput{
+		Cluster:               aws.String(d.config.Cluster),
+		ServiceName:           rex.ServiceName,
 		InfrastructureRoleArn: rex.InfrastructureRoleArn,
 		ExecutionRoleArn:      ac.ExecutionRoleArn,
 		Cpu:                   ac.Cpu,
@@ -105,4 +118,43 @@ func (d *App) LoadExpressDefinition(path string) (*ExpressGatewayService, error)
 		return nil, fmt.Errorf("failed to apply ignore: %w", err)
 	}
 	return &ex, nil
+}
+
+func diffExpressGatewayServices(ctx context.Context, local, remote *ExpressGatewayService, localPath string, opt *DiffOption) (bool, error) {
+	var remoteArn string
+	if remote != nil {
+		remoteArn = aws.ToString(remote.ServiceName)
+	}
+
+	//localSvForDiff := ServiceDefinitionForDiff(local)
+	//remoteSvForDiff := ServiceDefinitionForDiff(remote)
+
+	newSvBytes, err := MarshalJSONForAPI(local)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal new express gateway service definition: %w", err)
+	}
+	remoteSvBytes, err := MarshalJSONForAPI(remote)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal remote express gateway service definition: %w", err)
+	}
+
+	remoteSv := toDiffString(remoteSvBytes)
+	newSv := toDiffString(newSvBytes)
+	if remoteSv == newSv {
+		return false, nil
+	}
+
+	switch {
+	case opt.External != "":
+		return true, diffExternal(ctx, opt.External, "service", remoteSv, newSv, opt)
+	case opt.Unified:
+		edits := myers.ComputeEdits(span.URIFromPath(remoteArn), remoteSv, newSv)
+		ds := fmt.Sprint(gotextdiff.ToUnified(remoteArn, localPath, remoteSv, edits))
+		fmt.Fprint(opt.w, coloredDiff(ds))
+		return true, nil
+	default:
+		ds := diff.Diff(remoteSv, newSv)
+		fmt.Fprint(opt.w, coloredDiff(fmt.Sprintf("--- %s\n+++ %s\n%s", remoteArn, localPath, ds)))
+		return true, nil
+	}
 }
