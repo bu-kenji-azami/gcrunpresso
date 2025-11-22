@@ -55,8 +55,9 @@ type Config struct {
 	Region                string            `yaml:"region" json:"region"`
 	Cluster               string            `yaml:"cluster" json:"cluster"`
 	Service               string            `yaml:"service" json:"service"`
-	ServiceDefinitionPath string            `yaml:"service_definition" json:"service_definition"`
-	TaskDefinitionPath    string            `yaml:"task_definition" json:"task_definition"`
+	ServiceDefinitionPath string            `yaml:"service_definition,omitempty" json:"service_definition,omitempty"`
+	TaskDefinitionPath    string            `yaml:"task_definition,omitempty" json:"task_definition,omitempty"`
+	ExpressDefinitionPath string            `yaml:"express_definition,omitempty" json:"express_definition,omitempty"`
 	Plugins               []ConfigPlugin    `yaml:"plugins,omitempty" json:"plugins,omitempty"`
 	AppSpec               *appspec.AppSpec  `yaml:"appspec,omitempty" json:"appspec,omitempty"`
 	FilterCommand         string            `yaml:"filter_command,omitempty" json:"filter_command,omitempty"`
@@ -145,6 +146,9 @@ func (c *Config) Restrict(ctx context.Context) error {
 	}
 	if c.TaskDefinitionPath != "" && !filepath.IsAbs(c.TaskDefinitionPath) {
 		c.TaskDefinitionPath = filepath.Join(c.dir, c.TaskDefinitionPath)
+	}
+	if c.ExpressDefinitionPath != "" && !filepath.IsAbs(c.ExpressDefinitionPath) {
+		c.ExpressDefinitionPath = filepath.Join(c.dir, c.ExpressDefinitionPath)
 	}
 	if c.RequiredVersion != "" {
 		constraints, err := goVersion.NewConstraint(c.RequiredVersion)
