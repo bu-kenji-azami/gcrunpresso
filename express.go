@@ -158,3 +158,44 @@ func diffExpressGatewayServices(ctx context.Context, local, remote *ExpressGatew
 		return true, nil
 	}
 }
+
+func (d *App) DeployExpressGatewayService(ctx context.Context, opt DeployOption) error {
+	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
+	if err != nil {
+		return err
+	}
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return err
+	}
+	in := &ecs.UpdateExpressGatewayServiceInput{
+		ServiceArn:           sv.ServiceArn,
+		Cpu:                  ex.Cpu,
+		Memory:               ex.Memory,
+		HealthCheckPath:      ex.HealthCheckPath,
+		NetworkConfiguration: ex.NetworkConfiguration,
+		ScalingTarget:        ex.ScalingTarget,
+		ExecutionRoleArn:     ex.ExecutionRoleArn,
+		TaskRoleArn:          ex.TaskRoleArn,
+		PrimaryContainer:     ex.PrimaryContainer,
+	}
+	d.LogJSON(in)
+	if opt.DryRun {
+		d.LogInfo("Dry run mode, not updating express gateway service")
+		return nil
+	}
+	d.LogInfo("Updating express gateway service %s...", aws.ToString(sv.ServiceName))
+	res, err := d.ecs.UpdateExpressGatewayService(ctx, in)
+	if err != nil {
+		return fmt.Errorf("failed to update express gateway service: %w", err)
+	}
+	d.LogInfo("Express gateway service is updated")
+	d.LogJSON(res.Service)
+
+	if !opt.Wait {
+		return nil
+	}
+	sleepContext(ctx, delayForServiceChanged) // wait for service updated
+	// wait for service deployed
+	return d.WaitServiceDeployCompleted(ctx, sv)
+}

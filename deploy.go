@@ -99,6 +99,11 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 		return err
 	}
 
+	// express mode is handled here
+	if d.config.ExpressDefinitionPath != "" {
+		return d.DeployExpressGatewayService(ctx, opt)
+	}
+
 	doDeploy, err := d.DeployFunc(sv)
 	if err != nil {
 		return err
@@ -502,6 +507,7 @@ type deployFunc func(ctx context.Context, taskDefinitionArn string, count *int32
 
 func (d *App) DeployFunc(sv *Service) (deployFunc, error) {
 	defaultFunc := d.UpdateServiceTasks
+
 	if sv == nil || sv.DeploymentController == nil {
 		return defaultFunc, nil
 	}
