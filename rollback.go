@@ -141,7 +141,7 @@ func (d *App) RollbackServiceTasks(ctx context.Context, sv *Service, targetArn s
 
 func (d *App) RollbackECSService(ctx context.Context, sv *Service, targetArn string, opt RollbackOption) (string, error) {
 	// Check if there's an active deployment in progress
-	activeDeployment, err := d.findActiveECSDeployment(ctx, 0)
+	deploymentArn, err := d.findActiveECSDeploymentArn(ctx, 0)
 	if err != nil {
 		var errNotFound ErrNotFound
 		if errors.As(err, &errNotFound) {
@@ -151,9 +151,8 @@ func (d *App) RollbackECSService(ctx context.Context, sv *Service, targetArn str
 		return "", err
 	}
 
-	// Active deployment found, roll it back
-	d.LogInfo("Active deployment found, rolling back deployment %s %s", arnToName(*activeDeployment.ServiceDeploymentArn), opt.DryRunString())
-	return d.rollbackActiveECSDeployment(ctx, sv, activeDeployment, opt)
+	d.LogInfo("Active deployment found, rolling back deployment %s %s", arnToName(deploymentArn), opt.DryRunString())
+	return d.rollbackActiveECSDeployment(ctx, sv, deploymentArn, opt)
 }
 
 func (d *App) RollbackByCodeDeploy(ctx context.Context, sv *Service, targetArn string, opt RollbackOption) (string, error) {
@@ -310,7 +309,18 @@ func (d *App) waitForCodeDeployRollback(ctx context.Context, id string) error {
 	})
 }
 
-func (d *App) findActiveECSDeployment(ctx context.Context, timeout time.Duration) (*types.ServiceDeploymentBrief, error) {
+func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Duration) (string, error) {
+	d.LogDebug("finding active ECS service deployment...")
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to describe service: %w", err)
+	}
+	if dpArn := sv.CurrentServiceDeployment; dpArn != nil {
+		d.LogDebug("current service deployment found: %s", aws.ToString(dpArn))
+		return aws.ToString(dpArn), nil
+	}
+	d.LogDebug("no current service deployment, searching active deployments...")
+
 	tm := time.NewTimer(timeout)
 	defer tm.Stop()
 	activeDeployments := make([]types.ServiceDeploymentBrief, 0)
@@ -324,7 +334,7 @@ func (d *App) findActiveECSDeployment(ctx context.Context, timeout time.Duration
 			},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to list service deployments: %w", err)
+			return "", fmt.Errorf("failed to list service deployments: %w", err)
 		}
 		// found active deployments started after the application started
 		activeDeployments = append(activeDeployments,
@@ -338,9 +348,9 @@ func (d *App) findActiveECSDeployment(ctx context.Context, timeout time.Duration
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		case <-tm.C: // Timeout reached
-			return nil, ErrNotFound("no active service deployments found")
+			return "", ErrNotFound("no active service deployments found")
 		default:
 			d.LogDebug("no active service deployments found, retrying...")
 			sleepContext(ctx, delayForServiceChanged)
@@ -351,21 +361,21 @@ func (d *App) findActiveECSDeployment(ctx context.Context, timeout time.Duration
 	deployment := lo.MaxBy(activeDeployments, func(item types.ServiceDeploymentBrief, max types.ServiceDeploymentBrief) bool {
 		return item.CreatedAt.After(*max.CreatedAt)
 	})
-	return &deployment, nil
+	return aws.ToString(deployment.ServiceDeploymentArn), nil
 }
 
-func (d *App) rollbackActiveECSDeployment(ctx context.Context, sv *Service, deployment *types.ServiceDeploymentBrief, opt RollbackOption) (string, error) {
-	currentTaskDefinition := *sv.TaskDefinition
+func (d *App) rollbackActiveECSDeployment(ctx context.Context, sv *Service, deploymentArn string, opt RollbackOption) (string, error) {
+	currentTaskDefinition := aws.ToString(sv.TaskDefinition)
 
 	// Stop the deployment with rollback
-	d.LogInfo("Stopping deployment %s with rollback %s", arnToName(*deployment.ServiceDeploymentArn), opt.DryRunString())
+	d.LogInfo("Stopping deployment %s with rollback %s", arnToName(deploymentArn), opt.DryRunString())
 	if opt.DryRun {
-		d.LogInfo("Rollback would be triggered for deployment %s", arnToName(*deployment.ServiceDeploymentArn))
+		d.LogInfo("Rollback would be triggered for deployment %s", arnToName(deploymentArn))
 		return currentTaskDefinition, nil
 	}
 
 	if _, err := d.ecs.StopServiceDeployment(ctx, &ecs.StopServiceDeploymentInput{
-		ServiceDeploymentArn: deployment.ServiceDeploymentArn,
+		ServiceDeploymentArn: &deploymentArn,
 		StopType:             types.StopServiceDeploymentStopTypeRollback,
 	}); err != nil {
 		return "", fmt.Errorf("failed to stop service deployment: %w", err)

@@ -223,7 +223,7 @@ func serviceRevisionsSummaries(dp *types.ServiceDeployment) []string {
 
 func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error {
 	d.LogInfo("Waiting for service deployed...(it will take a few minutes)")
-	deployment, err := d.findActiveECSDeployment(ctx, time.Second*10)
+	deploymentArn, err := d.findActiveECSDeploymentArn(ctx, time.Second*10)
 	if err != nil {
 		if errors.As(err, &errNotFound) {
 			d.LogInfo("No active deployment found")
@@ -231,7 +231,6 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		}
 		return err
 	}
-	deploymentArn := aws.ToString(deployment.ServiceDeploymentArn)
 	d.LogInfo("Waiting for service deployment %s to complete...", arnToName(deploymentArn))
 
 	tick := time.NewTicker(refreshInterval)
