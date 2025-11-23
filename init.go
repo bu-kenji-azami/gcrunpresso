@@ -113,15 +113,20 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 		// tdOnly
 		conf.Service = ""
 		conf.ServiceDefinitionPath = ""
-	} else if sv.isCodeDeploy() {
-		info, err := d.findDeploymentInfo(ctx)
-		if err != nil {
-			LogWarn("failed to find CodeDeploy deployment info: %s", err)
-			LogWarn("you need to set config.codedeploy section manually")
-		} else {
-			conf.CodeDeploy = &ConfigCodeDeploy{
-				ApplicationName:     *info.ApplicationName,
-				DeploymentGroupName: *info.DeploymentGroupName,
+		conf.ExpressDefinitionPath = ""
+	} else {
+		// normal
+		conf.ExpressDefinitionPath = ""
+		if sv.isCodeDeploy() {
+			info, err := d.findDeploymentInfo(ctx)
+			if err != nil {
+				LogWarn("failed to find CodeDeploy deployment info: %s", err)
+				LogWarn("you need to set config.codedeploy section manually")
+			} else {
+				conf.CodeDeploy = &ConfigCodeDeploy{
+					ApplicationName:     *info.ApplicationName,
+					DeploymentGroupName: *info.DeploymentGroupName,
+				}
 			}
 		}
 	}
