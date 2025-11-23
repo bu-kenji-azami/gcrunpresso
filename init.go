@@ -76,6 +76,12 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 		}
 	}
 	switch {
+	case opt.Express:
+		ex, sv, err := d.initExpressGatewayService(ctx, opt)
+		if err != nil {
+			return err
+		}
+		return d.initConfigurationFile(ctx, conf.path, opt, sv, nil, ex)
 	case tdOnly:
 		tdArn := opt.TaskDefinition
 		td, err := d.initTaskDefinition(ctx, opt, tdArn)
@@ -83,12 +89,6 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 			return err
 		}
 		return d.initConfigurationFile(ctx, conf.path, opt, nil, td, nil)
-	case opt.Express:
-		ex, sv, err := d.initExpressGatewayService(ctx, opt)
-		if err != nil {
-			return err
-		}
-		return d.initConfigurationFile(ctx, conf.path, opt, sv, nil, ex)
 	default:
 		sv, tdArn, err := d.initServiceDefinition(ctx, opt)
 		if err != nil {
@@ -127,7 +127,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 	}
 
 	// Express Mode uses CANARY deployment, so requires increasing timeout
-	if sv != nil && sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+	if sv != nil && sv.isExpressMode() {
 		conf.Timeout = &Duration{Duration: DefaultTimeout * 2}
 	}
 
@@ -256,7 +256,7 @@ func treatmentServiceDefinition(sv *Service) {
 	}
 
 	// Express Mode cannot use DeploymentConfiguration and LoadBalancers
-	if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+	if sv.isExpressMode() {
 		sv.DeploymentConfiguration = nil
 		sv.LoadBalancers = nil
 	}

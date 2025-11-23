@@ -100,8 +100,8 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	}
 
 	// express mode is handled here
-	if d.config.ExpressDefinitionPath != "" {
-		return d.DeployExpressGatewayService(ctx, opt)
+	if d.config.isExpressMode() {
+		return d.DeployExpressGatewayService(ctx, sv, opt)
 	}
 
 	doDeploy, err := d.DeployFunc(sv)
@@ -249,7 +249,7 @@ func svToUpdateServiceInput(sv *Service) *ecs.UpdateServiceInput {
 	}
 
 	// in Express Mode, cannot update some configurations
-	if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+	if sv.isExpressMode() {
 		in.DeploymentConfiguration = nil
 		in.LoadBalancers = nil
 	}

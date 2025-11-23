@@ -230,6 +230,10 @@ func (c *Config) ValidateVersion(version string) error {
 	return nil
 }
 
+func (c *Config) isExpressMode() bool {
+	return c.ExpressDefinitionPath != ""
+}
+
 // NewDefaultConfig creates a default configuration.
 func NewDefaultConfig() *Config {
 	return &Config{

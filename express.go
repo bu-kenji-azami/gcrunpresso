@@ -3,6 +3,7 @@ package ecspresso
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -61,7 +62,7 @@ func (d *App) DescribeExpressGatewayService(ctx context.Context) (*ExpressGatewa
 	if err != nil {
 		return nil, nil, err
 	}
-	if sv.ResourceManagementType != types.ResourceManagementTypeEcs {
+	if !sv.isExpressMode() {
 		return nil, nil, fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
 	}
 	res, err := d.ecs.DescribeExpressGatewayService(ctx, &ecs.DescribeExpressGatewayServiceInput{
@@ -159,12 +160,11 @@ func diffExpressGatewayServices(ctx context.Context, local, remote *ExpressGatew
 	}
 }
 
-func (d *App) DeployExpressGatewayService(ctx context.Context, opt DeployOption) error {
-	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
-	if err != nil {
-		return err
+func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt DeployOption) error {
+	if !sv.isExpressMode() {
+		return fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
 	}
-	sv, err := d.DescribeService(ctx)
+	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
 	if err != nil {
 		return err
 	}
@@ -179,12 +179,11 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, opt DeployOption)
 		TaskRoleArn:          ex.TaskRoleArn,
 		PrimaryContainer:     ex.PrimaryContainer,
 	}
-	d.LogJSON(in)
+	d.LogInfo("Updating express gateway service %s...%s", aws.ToString(sv.ServiceName), opt.DryRunString())
 	if opt.DryRun {
-		d.LogInfo("Dry run mode, not updating express gateway service")
+		OutputJSONForAPI(os.Stdout, in)
 		return nil
 	}
-	d.LogInfo("Updating express gateway service %s...", aws.ToString(sv.ServiceName))
 	res, err := d.ecs.UpdateExpressGatewayService(ctx, in)
 	if err != nil {
 		return fmt.Errorf("failed to update express gateway service: %w", err)

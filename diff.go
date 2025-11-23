@@ -40,24 +40,8 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 	}
 
 	// express gateway service
-	if d.config.ExpressDefinitionPath != "" {
-		d.LogDebug("diff express gateway service compare with %s", d.config.ExpressDefinitionPath)
-		newEx, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
-		if err != nil {
-			return fmt.Errorf("failed to load express gateway service definition: %w", err)
-		}
-		remoteEx, _, err := d.DescribeExpressGatewayService(ctx)
-		if err != nil {
-			if errors.As(err, &errNotFound) {
-				d.LogInfo("express gateway service not found, will create a new express gateway service")
-			} else {
-				return fmt.Errorf("failed to describe express gateway service: %w", err)
-			}
-		}
-		if _, err := diffExpressGatewayServices(ctx, newEx, remoteEx, d.config.ExpressDefinitionPath, &opt); err != nil {
-			return err
-		}
-		return nil
+	if d.config.isExpressMode() {
+		return d.DiffExpress(ctx, opt)
 	}
 
 	var remoteTaskDefArn string
@@ -116,6 +100,26 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 		return err
 	}
 
+	return nil
+}
+
+func (d *App) DiffExpress(ctx context.Context, opt DiffOption) error {
+	d.LogDebug("diff express gateway service compare with %s", d.config.ExpressDefinitionPath)
+	newEx, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
+	if err != nil {
+		return fmt.Errorf("failed to load express gateway service definition: %w", err)
+	}
+	remoteEx, _, err := d.DescribeExpressGatewayService(ctx)
+	if err != nil {
+		if errors.As(err, &errNotFound) {
+			d.LogInfo("express gateway service not found, will create a new express gateway service")
+		} else {
+			return fmt.Errorf("failed to describe express gateway service: %w", err)
+		}
+	}
+	if _, err := diffExpressGatewayServices(ctx, newEx, remoteEx, d.config.ExpressDefinitionPath, &opt); err != nil {
+		return err
+	}
 	return nil
 }
 

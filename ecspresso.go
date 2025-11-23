@@ -92,6 +92,10 @@ func (sv *Service) getTaskDefinitionArn() (string, error) {
 	}
 }
 
+func (sv *Service) isExpressMode() bool {
+	return sv.ResourceManagementType == types.ResourceManagementTypeEcs
+}
+
 func (d *App) newServiceFromTypes(ctx context.Context, in types.Service) (*Service, error) {
 	sv := Service{
 		Service:      in,
