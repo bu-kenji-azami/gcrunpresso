@@ -1,0 +1,49 @@
+{
+   "cpu": "256",
+   "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
+   "healthCheckPath": "/",
+   "infrastructureRoleArn": "arn:aws:iam::123456789012:role/ecsInfrastructureRoleForExpressServices",
+   "memory": "512",
+   "networkConfiguration": {
+      "securityGroups": [
+         "sg-00123456789abcdef",
+         "sg-0fedcba9876543210"
+      ],
+      "subnets": [
+         "subnet-00123456789abcdef",
+         "subnet-0123456789abcdef0",
+         "subnet-023456789abcdef01"
+      ]
+   },
+   "primaryContainer": {
+      "awsLogsConfiguration": {
+         "logGroup": "/aws/ecs/ecspresso/printenv-8dbb",
+         "logStreamPrefix": "ecs"
+      },
+      "containerPort": 8080,
+      "environment": [
+         {
+            "name": "PORT",
+            "value": "8080"
+         },
+         {
+            "name": "HELLO",
+            "value": "world!"
+         }
+      ],
+      "image": "debian:latest"
+   },
+   "scalingTarget": {
+      "autoScalingMetric": "AVERAGE_CPU",
+      "autoScalingTargetValue": 60,
+      "maxTaskCount": 20,
+      "minTaskCount": 1
+   },
+   "tags": [
+      {
+         "key": "IsExpressService",
+         "value": "true"
+      }
+   ],
+   "taskRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole"
+}
