@@ -196,19 +196,43 @@ type verifyContextKeyType string
 
 var verifyStateKey = verifyContextKeyType("verifyState")
 
+type verifyAsset struct {
+	name string
+	fn   verifyResourceFunc
+}
+
 // Verify verifies service / task definitions related resources are valid.
 func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
-	if d.config.isExpressMode() {
-		return fmt.Errorf("verify is not supported for express mode")
-	}
 	vs := newVerifyState(opt.Cache)
 	ctx = context.WithValue(ctx, verifyStateKey, vs)
 
-	td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
-	if err != nil {
-		return err
+	var executionRoleArn *string
+	var resources []verifyAsset
+	var err error
+	if d.config.isExpressMode() {
+		ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
+		if err != nil {
+			return err
+		}
+		executionRoleArn = ex.ExecutionRoleArn
+		resources = []verifyAsset{
+			{name: "ExpressDefinition", fn: d.verifyExpressDefinition},
+			{name: "Cluster", fn: d.verifyCluster},
+		}
+	} else {
+		td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
+		if err != nil {
+			return err
+		}
+		executionRoleArn = td.ExecutionRoleArn
+		resources = []verifyAsset{
+			{name: "TaskDefinition", fn: d.verifyTaskDefinition},
+			{name: "ServiceDefinition", fn: d.verifyServiceDefinition},
+			{name: "Cluster", fn: d.verifyCluster},
+		}
 	}
-	d.verifier, err = d.newAssumedVerifier(ctx, d.config.awsv2Config, td.ExecutionRoleArn, &opt)
+
+	d.verifier, err = d.newAssumedVerifier(ctx, d.config.awsv2Config, executionRoleArn, &opt)
 	if err != nil {
 		return err
 	}
@@ -217,14 +241,6 @@ func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
 	defer cancel()
 
 	d.LogInfo("Starting verify")
-	resources := []struct {
-		name string
-		fn   verifyResourceFunc
-	}{
-		{name: "TaskDefinition", fn: d.verifyTaskDefinition},
-		{name: "ServiceDefinition", fn: d.verifyServiceDefinition},
-		{name: "Cluster", fn: d.verifyCluster},
-	}
 	for _, r := range resources {
 		if _, err := vs.VerifyResource(ctx, r.name, r.fn); err != nil {
 			return err
@@ -432,6 +448,57 @@ func (d *App) verifyServiceDefinition(ctx context.Context) error {
 		name := fmt.Sprintf("VpcLatticeConfiguration[%d]", i)
 		_, err := vs.VerifyResource(ctx, name, func(context.Context) error {
 			return d.verifyVpcLatticeConfiguration(ctx, lc, td)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *App) verifyExpressDefinition(ctx context.Context) error {
+	vs := ctx.Value(verifyStateKey).(*verifyState)
+	if d.config.ExpressDefinitionPath == "" {
+		return ErrSkipVerify("no ExpressDefinition")
+	}
+	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
+	if err != nil {
+		return err
+	}
+
+	if execRole := ex.ExecutionRoleArn; execRole != nil {
+		name := fmt.Sprintf("ExecutionRole[%s]", *execRole)
+		_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+			return d.verifyRole(ctx, *execRole, "ecs-tasks.amazonaws.com")
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if taskRole := ex.TaskRoleArn; taskRole != nil {
+		name := fmt.Sprintf("TaskRole[%s]", *taskRole)
+		_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+			return d.verifyRole(ctx, *taskRole, "ecs-tasks.amazonaws.com")
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if infraRole := ex.InfrastructureRoleArn; infraRole != nil {
+		name := fmt.Sprintf("InfrastructureRole[%s]", *infraRole)
+		_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+			return d.verifyRole(ctx, *infraRole, "ecs.amazonaws.com")
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	if pc := ex.PrimaryContainer; pc != nil {
+		name := "PrimaryContainer"
+		_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+			return d.verifyExpressContainer(ctx, pc)
 		})
 		if err != nil {
 			return err
@@ -663,17 +730,22 @@ func (d *App) verifyRegistryImage(ctx context.Context, image, user, password str
 		return fmt.Errorf("%s:%s is not found in Registry", image, tag)
 	}
 
-	td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
-	if err != nil {
-		return err
+	var arch, os string
+	if d.config.isExpressMode() {
+		arch, os = "amd64", "linux" // express gateway only supports linux/amd64 for now
+	} else {
+		td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
+		if err != nil {
+			return err
+		}
+		// when requiredCompatibilities contain only fargate, regard as fargate task definition
+		isFargateTask := len(td.RequiresCompatibilities) == 1 && td.RequiresCompatibilities[0] == types.CompatibilityFargate
+		isFargateService, err := d.isFargateService()
+		if err != nil {
+			return err
+		}
+		arch, os = NormalizePlatform(td.RuntimePlatform, isFargateTask || isFargateService)
 	}
-	// when requiredCompatibilities contain only fargate, regard as fargate task definition
-	isFargateTask := len(td.RequiresCompatibilities) == 1 && td.RequiresCompatibilities[0] == types.CompatibilityFargate
-	isFargateService, err := d.isFargateService()
-	if err != nil {
-		return err
-	}
-	arch, os := NormalizePlatform(td.RuntimePlatform, isFargateTask || isFargateService)
 	if arch == "" && os == "" {
 		return nil
 	}
@@ -802,6 +874,84 @@ func (d *App) verifyContainer(ctx context.Context, c *types.ContainerDefinition,
 		}
 	}
 
+	return nil
+}
+
+func (d *App) verifyExpressContainer(ctx context.Context, c *types.ExpressGatewayContainer) error {
+	vs := ctx.Value(verifyStateKey).(*verifyState)
+	image := aws.ToString(c.Image)
+	name := fmt.Sprintf("Image[%s]", image)
+	_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+		return d.verifyImage(ctx, image)
+	})
+	if err != nil {
+		return err
+	}
+	for i, secret := range c.Secrets {
+		name := aws.ToString(secret.Name)
+		if name == "" {
+			return fmt.Errorf("secrets[%d] name is missing", i)
+		}
+		valueFrom := aws.ToString(secret.ValueFrom)
+		if valueFrom == "" {
+			return fmt.Errorf("secrets[%d] %s valueFrom is missing", i, name)
+		}
+		if _, err := vs.VerifyResource(ctx, fmt.Sprintf("Secret %s[%s]", name, valueFrom), func(ctx context.Context) error {
+			return d.verifier.existsSecretValue(ctx, *secret.ValueFrom)
+		}); err != nil {
+			return err
+		}
+	}
+	if lc := c.AwsLogsConfiguration; lc != nil {
+		name := fmt.Sprintf("AwsLogsConfiguration[%s]", aws.ToString(lc.LogGroup))
+		_, err := vs.VerifyResource(ctx, name, func(ctx context.Context) error {
+			return d.verifyExpressLogConfiguration(ctx, lc)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *App) verifyExpressLogConfiguration(ctx context.Context, lc *types.ExpressGatewayServiceAwsLogsConfiguration) error {
+	group := aws.ToString(lc.LogGroup)
+	prefix := aws.ToString(lc.LogStreamPrefix)
+	if group == "" {
+		return errors.New("logGroup required")
+	}
+
+	if !d.verifier.opt.PutLogs {
+		return ErrSkipVerify(fmt.Sprintf("putting logs to %s", group))
+	}
+
+	var stream string
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	if prefix != "" {
+		stream = fmt.Sprintf("%s/%s/%s", prefix, "ecspresso-verify", suffix)
+	} else {
+		stream = fmt.Sprintf("%s/%s", "ecspresso-verify", suffix)
+	}
+
+	if _, err := d.verifier.cwl.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+		LogGroupName:  aws.String(group),
+		LogStreamName: aws.String(stream),
+	}); err != nil {
+		return fmt.Errorf("failed to create log stream %s in %s: %w", stream, group, err)
+	}
+	if _, err := d.verifier.cwl.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(group),
+		LogStreamName: aws.String(stream),
+		LogEvents: []cloudwatchlogsTypes.InputLogEvent{
+			{
+				Message:   aws.String("This is a verify message by ecspresso"),
+				Timestamp: aws.Int64(time.Now().Unix() * 1000),
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to put log events to %s stream %s: %w", group, stream, err)
+	}
 	return nil
 }
 
