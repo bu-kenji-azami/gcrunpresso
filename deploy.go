@@ -94,7 +94,11 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	if err != nil {
 		if errors.As(err, &errNotFound) {
 			d.LogInfo("Service %s not found. Creating a new service %s", d.Service, opt.DryRunString())
-			return d.createService(ctx, opt)
+			if d.config.isExpressMode() {
+				return d.createExpressGatewayService(ctx, opt)
+			} else {
+				return d.createService(ctx, opt)
+			}
 		}
 		return err
 	}

@@ -101,6 +101,34 @@ func (d *App) DescribeExpressGatewayService(ctx context.Context, sv *Service) (*
 	}, nil
 }
 
+func (d *App) createExpressGatewayService(ctx context.Context, opt DeployOption) error {
+	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
+	if err != nil {
+		return err
+	}
+	d.LogInfo("Creating express gateway service %s...%s", aws.ToString(ex.ServiceName), opt.DryRunString())
+	if opt.DryRun {
+		OutputJSONForAPI(os.Stdout, ex)
+		return nil
+	}
+	res, err := d.ecs.CreateExpressGatewayService(ctx, ex.CreateExpressGatewayServiceInput)
+	if err != nil {
+		return fmt.Errorf("failed to create express gateway service: %w", err)
+	}
+	d.LogInfo("Express gateway service is created")
+	d.LogJSON(res.Service)
+
+	if !opt.Wait {
+		return nil
+	}
+	sleepContext(ctx, delayForServiceChanged) // wait for service created
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return err
+	}
+	return d.WaitServiceDeployCompleted(ctx, sv)
+}
+
 func (d *App) LoadExpressDefinition(path string) (*ExpressGatewayService, error) {
 	if path == "" {
 		return nil, fmt.Errorf("express_definition is not defined")
