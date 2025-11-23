@@ -747,6 +747,20 @@ var cliTests = []struct {
 		},
 	},
 	{
+		args: []string{"init", "--service", "myservice", "--express", "--jsonnet", "--express-definition-path", "express.jsonnet"},
+		sub:  "init",
+		subOption: &ecspresso.InitOption{
+			Region:                os.Getenv("AWS_REGION"),
+			Cluster:               "default",
+			Service:               "myservice",
+			TaskDefinitionPath:    "ecs-task-def.json",
+			ServiceDefinitionPath: "ecs-service-def.json",
+			ExpressDefinitionPath: "express.jsonnet",
+			Express:               true,
+			Jsonnet:               true,
+		},
+	},
+	{
 		args: []string{"diff"},
 		sub:  "diff",
 		subOption: &ecspresso.DiffOption{
