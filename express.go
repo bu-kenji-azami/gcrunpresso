@@ -197,6 +197,10 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 	if !sv.isExpressMode() {
 		return fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
 	}
+	if !opt.UpdateService {
+		return fmt.Errorf("express gateway service does not support this operation")
+	}
+
 	ex, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
 	if err != nil {
 		return err
