@@ -198,6 +198,9 @@ var verifyStateKey = verifyContextKeyType("verifyState")
 
 // Verify verifies service / task definitions related resources are valid.
 func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
+	if d.config.isExpressMode() {
+		return fmt.Errorf("verify is not supported for express mode")
+	}
 	vs := newVerifyState(opt.Cache)
 	ctx = context.WithValue(ctx, verifyStateKey, vs)
 

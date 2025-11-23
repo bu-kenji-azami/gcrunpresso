@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -158,14 +159,15 @@ func diffExpressGatewayServices(ctx context.Context, local, remote *ExpressGatew
 		remoteArn = aws.ToString(remote.ServiceName)
 	}
 
-	//localSvForDiff := ServiceDefinitionForDiff(local)
-	//remoteSvForDiff := ServiceDefinitionForDiff(remote)
+	sortExpressDefinition(local)
+	sortExpressDefinition(remote)
+	ignores := buildIgnoreQueryForExpressDefinition(local)
 
-	newSvBytes, err := MarshalJSONForAPI(local)
+	newSvBytes, err := MarshalJSONForAPI(local, ignores...)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal new express gateway service definition: %w", err)
 	}
-	remoteSvBytes, err := MarshalJSONForAPI(remote)
+	remoteSvBytes, err := MarshalJSONForAPI(remote, ignores...)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal remote express gateway service definition: %w", err)
 	}
@@ -239,4 +241,54 @@ func (d *App) deleteExpressGatewayService(ctx context.Context, sv *Service, _ De
 	}
 	d.LogInfo("Service is deleted")
 	return nil
+}
+
+// build ignore query
+// ECS Express sets some default values, so ignore them in diff when the local definition doesn't set them.
+func buildIgnoreQueryForExpressDefinition(ex *ExpressGatewayService) []string {
+	ignores := []string{}
+
+	if ex.NetworkConfiguration == nil {
+		ignores = append(ignores, "del(.networkConfiguration)")
+	}
+	if ex.ScalingTarget == nil {
+		ignores = append(ignores, "del(.scalingTarget)")
+	}
+	if ex.PrimaryContainer != nil && ex.PrimaryContainer.AwsLogsConfiguration == nil {
+		ignores = append(ignores, "del(.primaryContainer.awsLogsConfiguration)")
+	}
+
+	return ignores
+}
+
+func sortExpressDefinition(ex *ExpressGatewayService) {
+	if ex == nil {
+		return
+	}
+	if nc := ex.NetworkConfiguration; nc != nil {
+		sort.Strings(nc.SecurityGroups)
+		sort.Strings(nc.Subnets)
+	}
+	sort.SliceStable(ex.Tags, func(i, j int) bool {
+		return aws.ToString(ex.Tags[i].Key) < aws.ToString(ex.Tags[j].Key)
+	})
+
+	pc := ex.PrimaryContainer
+	sort.SliceStable(pc.Environment, func(i, j int) bool {
+		return aws.ToString(pc.Environment[i].Name) < aws.ToString(pc.Environment[j].Name)
+	})
+	sort.SliceStable(pc.Secrets, func(i, j int) bool {
+		return aws.ToString(pc.Secrets[i].Name) < aws.ToString(pc.Secrets[j].Name)
+	})
+
+	// fill default values to make diff stable
+	if ex.Cpu == nil {
+		ex.Cpu = aws.String("1024")
+	}
+	if ex.Memory == nil {
+		ex.Memory = aws.String("2048")
+	}
+	if ex.HealthCheckPath == nil {
+		ex.HealthCheckPath = aws.String("/")
+	}
 }
