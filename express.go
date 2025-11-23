@@ -291,4 +291,9 @@ func sortExpressDefinition(ex *ExpressGatewayService) {
 	if ex.HealthCheckPath == nil {
 		ex.HealthCheckPath = aws.String("/")
 	}
+	if pc := ex.PrimaryContainer; pc != nil {
+		if pc.ContainerPort == nil {
+			pc.ContainerPort = aws.Int32(80)
+		}
+	}
 }
