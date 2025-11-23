@@ -43,15 +43,22 @@ func (d *App) Delete(ctx context.Context, opt DeleteOption) error {
 			return fmt.Errorf("confirmation failed")
 		}
 	}
-	dsi := &ecs.DeleteServiceInput{
+	if sv.isExpressMode() {
+		return d.deleteExpressGatewayService(ctx, sv, opt)
+	} else {
+		return d.deleteService(ctx, sv, opt)
+	}
+}
+
+func (d *App) deleteService(ctx context.Context, sv *Service, opt DeleteOption) error {
+	in := &ecs.DeleteServiceInput{
 		Cluster: &d.config.Cluster,
 		Service: sv.ServiceName,
 		Force:   &opt.Terminate, // == aws ecs delete-service --force
 	}
-	if _, err := d.ecs.DeleteService(ctx, dsi); err != nil {
+	if _, err := d.ecs.DeleteService(ctx, in); err != nil {
 		return fmt.Errorf("failed to delete service: %w", err)
 	}
 	d.LogInfo("Service is deleted")
-
 	return nil
 }

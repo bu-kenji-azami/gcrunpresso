@@ -229,3 +229,14 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 	// wait for service deployed
 	return d.WaitServiceDeployCompleted(ctx, sv)
 }
+
+func (d *App) deleteExpressGatewayService(ctx context.Context, sv *Service, _ DeleteOption) error {
+	in := &ecs.DeleteExpressGatewayServiceInput{
+		ServiceArn: sv.ServiceArn,
+	}
+	if _, err := d.ecs.DeleteExpressGatewayService(ctx, in); err != nil {
+		return fmt.Errorf("failed to delete express gateway service: %w", err)
+	}
+	d.LogInfo("Service is deleted")
+	return nil
+}
