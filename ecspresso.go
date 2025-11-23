@@ -323,6 +323,7 @@ type DescribeServiceStatusOutput struct {
 	Service        string
 	Cluster        string
 	TaskDefinition string
+	Express        *types.ECSExpressGatewayService
 	Deployments    []types.Deployment
 	TaskSets       []types.TaskSet
 	AutoScaling    struct {
@@ -337,10 +338,14 @@ func (s *DescribeServiceStatusOutput) String() string {
 	fmt.Fprintln(buf, "Service:", s.Service)
 	fmt.Fprintln(buf, "Cluster:", arnToName(s.Cluster))
 	fmt.Fprintln(buf, "TaskDefinition:", arnToName(s.TaskDefinition))
+	if ex := s.Express; ex != nil {
+		fmt.Fprintln(buf, "Express:")
+		fmt.Fprint(buf, formatExpress(ex))
+	}
 	if len(s.Deployments) > 0 {
 		fmt.Fprintln(buf, "Deployments:")
 		for _, dep := range s.Deployments {
-			fmt.Fprintln(buf, spcIndent+formatDeployment(dep))
+			fmt.Fprint(buf, spcIndent+formatDeployment(dep))
 		}
 	}
 	if len(s.TaskSets) > 0 {
@@ -366,31 +371,38 @@ func (s *DescribeServiceStatusOutput) String() string {
 }
 
 func (d *App) DescribeServiceStatus(ctx context.Context, events int) (*Service, error) {
-	s, err := d.DescribeService(ctx)
+	sv, err := d.DescribeService(ctx)
 	if err != nil {
 		return nil, err
 	}
-	tdArn, err := s.getTaskDefinitionArn()
+	tdArn, err := sv.getTaskDefinitionArn()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task definition arn: %w", err)
 	}
 	out := &DescribeServiceStatusOutput{
-		Service:        aws.ToString(s.ServiceName),
-		Cluster:        aws.ToString(s.ClusterArn),
+		Service:        aws.ToString(sv.ServiceName),
+		Cluster:        aws.ToString(sv.ClusterArn),
 		TaskDefinition: tdArn,
-		Deployments:    s.Deployments,
-		TaskSets:       s.TaskSets,
+		Deployments:    sv.Deployments,
+		TaskSets:       sv.TaskSets,
+	}
+	if sv.isExpressMode() {
+		ex, err := d.DescribeExpressGatewayService(ctx, sv)
+		if err != nil {
+			return nil, err
+		}
+		out.Express = ex.src
 	}
 
-	sort.SliceStable(s.Events, func(i, j int) bool {
-		return s.Events[i].CreatedAt.Before(*s.Events[j].CreatedAt)
+	sort.SliceStable(sv.Events, func(i, j int) bool {
+		return sv.Events[i].CreatedAt.Before(*sv.Events[j].CreatedAt)
 	})
-	head := lo.Max([]int{len(s.Events) - events, 0})
-	for i := head; i < len(s.Events); i++ {
-		out.Events = append(out.Events, s.Events[i])
+	head := lo.Max([]int{len(sv.Events) - events, 0})
+	for i := head; i < len(sv.Events); i++ {
+		out.Events = append(out.Events, sv.Events[i])
 	}
 
-	out.AutoScaling.ScalableTargets, out.AutoScaling.ScalingPolicies, err = d.describeAutoScaling(ctx, s)
+	out.AutoScaling.ScalableTargets, out.AutoScaling.ScalingPolicies, err = d.describeAutoScaling(ctx, sv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe autoscaling: %w", err)
 	}
@@ -398,7 +410,7 @@ func (d *App) DescribeServiceStatus(ctx context.Context, events int) (*Service, 
 	if _, err := WriteOutput(out); err != nil {
 		return nil, fmt.Errorf("failed to write output: %w", err)
 	}
-	return s, nil
+	return sv, nil
 }
 
 func (d *App) describeAutoScaling(ctx context.Context, s *Service) ([]aasTypes.ScalableTarget, []aasTypes.ScalingPolicy, error) {

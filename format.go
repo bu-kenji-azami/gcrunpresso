@@ -42,6 +42,21 @@ func formatTaskSet(ts types.TaskSet) string {
 	)
 }
 
+func formatExpress(ex *types.ECSExpressGatewayService) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, spcIndent+"Status: %s %s\n", ex.Status.StatusCode, aws.ToString(ex.Status.StatusReason))
+	if len(ex.ActiveConfigurations) > 0 {
+		ac := ex.ActiveConfigurations[0]
+		if len(ac.IngressPaths) > 0 {
+			fmt.Fprintln(&b, spcIndent+"IngressPaths:")
+		}
+		for _, p := range ac.IngressPaths {
+			fmt.Fprintf(&b, spcIndent+spcIndent+"%s %s\n", p.AccessType, aws.ToString(p.Endpoint))
+		}
+	}
+	return b.String()
+}
+
 type serviceEvent types.ServiceEvent
 
 func (e serviceEvent) String() string {

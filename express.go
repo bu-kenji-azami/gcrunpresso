@@ -17,6 +17,7 @@ import (
 
 type ExpressGatewayService struct {
 	*ecs.CreateExpressGatewayServiceInput
+	src *types.ECSExpressGatewayService
 }
 
 func (e *ExpressGatewayService) SetTags(tags []types.Tag) {
@@ -29,7 +30,12 @@ func (e *ExpressGatewayService) GetTags() []types.Tag {
 
 func (d *App) initExpressGatewayService(ctx context.Context, opt InitOption) (*ExpressGatewayService, *Service, error) {
 	conf := d.config
-	ex, sv, err := d.DescribeExpressGatewayService(ctx)
+
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ex, err := d.DescribeExpressGatewayService(ctx, sv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,26 +63,22 @@ func (d *App) initExpressGatewayService(ctx context.Context, opt InitOption) (*E
 	return ex, sv, nil
 }
 
-func (d *App) DescribeExpressGatewayService(ctx context.Context) (*ExpressGatewayService, *Service, error) {
-	sv, err := d.DescribeService(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+func (d *App) DescribeExpressGatewayService(ctx context.Context, sv *Service) (*ExpressGatewayService, error) {
 	if !sv.isExpressMode() {
-		return nil, nil, fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
+		return nil, fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
 	}
 	res, err := d.ecs.DescribeExpressGatewayService(ctx, &ecs.DescribeExpressGatewayServiceInput{
 		ServiceArn: sv.ServiceArn,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to describe express gateway service: %w", err)
+		return nil, fmt.Errorf("failed to describe express gateway service: %w", err)
 	}
 	rex := res.Service
 	if res.Service == nil {
-		return nil, nil, ErrNotFound("express gateway service is not found")
+		return nil, ErrNotFound("express gateway service is not found")
 	}
 	if len(rex.ActiveConfigurations) == 0 {
-		return nil, nil, fmt.Errorf("express gateway service %s has no active configuration", aws.ToString(rex.ServiceName))
+		return nil, fmt.Errorf("express gateway service %s has no active configuration", aws.ToString(rex.ServiceName))
 	}
 	ac := rex.ActiveConfigurations[0]
 	in := &ecs.CreateExpressGatewayServiceInput{
@@ -95,7 +97,8 @@ func (d *App) DescribeExpressGatewayService(ctx context.Context) (*ExpressGatewa
 	}
 	return &ExpressGatewayService{
 		CreateExpressGatewayServiceInput: in,
-	}, sv, nil
+		src:                              rex,
+	}, nil
 }
 
 func (d *App) LoadExpressDefinition(path string) (*ExpressGatewayService, error) {

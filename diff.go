@@ -105,11 +105,15 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 
 func (d *App) DiffExpress(ctx context.Context, opt DiffOption) error {
 	d.LogDebug("diff express gateway service compare with %s", d.config.ExpressDefinitionPath)
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return err
+	}
 	newEx, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
 	if err != nil {
 		return fmt.Errorf("failed to load express gateway service definition: %w", err)
 	}
-	remoteEx, _, err := d.DescribeExpressGatewayService(ctx)
+	remoteEx, err := d.DescribeExpressGatewayService(ctx, sv)
 	if err != nil {
 		if errors.As(err, &errNotFound) {
 			d.LogInfo("express gateway service not found, will create a new express gateway service")
