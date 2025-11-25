@@ -643,12 +643,14 @@ func (d *App) verifyECRImage(ctx context.Context, image, region string) error {
 func (d *App) verifyRegistryImage(ctx context.Context, image, user, password string) error {
 	var imageName string
 	var tagOrDigest string
-	if rr := strings.SplitN(image, "@", 2); len(rr) == 2 {
-		imageName = rr[0]
-		tagOrDigest = rr[1]
-	} else if rr := strings.SplitN(image, ":", 2); len(rr) == 2 {
-		imageName = rr[0]
-		tagOrDigest = rr[1]
+	if idx := strings.Index(image, "@"); idx != -1 {
+		imageName = image[:idx]
+		tagOrDigest = image[idx+1:]
+	} else if idx := strings.LastIndex(image, ":"); idx != -1 && !strings.Contains(image[idx+1:], "/") {
+		// The last colon is a tag separator only if there is no slash after it.
+		// If there is a slash (e.g. "host:443/repo"), the colon indicates a port.
+		imageName = image[:idx]
+		tagOrDigest = image[idx+1:]
 	} else {
 		imageName = image
 		tagOrDigest = "latest"
