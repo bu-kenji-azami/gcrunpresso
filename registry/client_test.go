@@ -50,7 +50,7 @@ var testFailImages = []struct {
 func TestImages(t *testing.T) {
 	for _, c := range testImages {
 		var fullImage string
-		if strings.HasPrefix(c.tagOrDigest, "sha256:") {
+		if strings.Contains(c.tagOrDigest, ":") {
 			fullImage = fmt.Sprintf("%s@%s", c.image, c.tagOrDigest)
 		} else {
 			fullImage = fmt.Sprintf("%s:%s", c.image, c.tagOrDigest)
@@ -83,7 +83,7 @@ func TestImages(t *testing.T) {
 func TestFailImages(t *testing.T) {
 	for _, c := range testFailImages {
 		var fullImage string
-		if strings.HasPrefix(c.tagOrDigest, "sha256:") {
+		if strings.Contains(c.tagOrDigest, ":") {
 			fullImage = fmt.Sprintf("%s@%s", c.image, c.tagOrDigest)
 		} else {
 			fullImage = fmt.Sprintf("%s:%s", c.image, c.tagOrDigest)
