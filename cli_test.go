@@ -747,6 +747,20 @@ var cliTests = []struct {
 		},
 	},
 	{
+		args: []string{"init", "--service", "myservice", "--no-express", "--jsonnet", "--express-definition-path", "express.jsonnet"},
+		sub:  "init",
+		subOption: &ecspresso.InitOption{
+			Region:                os.Getenv("AWS_REGION"),
+			Cluster:               "default",
+			Service:               "myservice",
+			TaskDefinitionPath:    "ecs-task-def.json",
+			ServiceDefinitionPath: "ecs-service-def.json",
+			ExpressDefinitionPath: "express.jsonnet",
+			Express:               ptr(false),
+			Jsonnet:               true,
+		},
+	},
+	{
 		args: []string{"init", "--service", "myservice", "--express", "--jsonnet", "--express-definition-path", "express.jsonnet"},
 		sub:  "init",
 		subOption: &ecspresso.InitOption{
@@ -756,7 +770,7 @@ var cliTests = []struct {
 			TaskDefinitionPath:    "ecs-task-def.json",
 			ServiceDefinitionPath: "ecs-service-def.json",
 			ExpressDefinitionPath: "express.jsonnet",
-			Express:               true,
+			Express:               ptr(true),
 			Jsonnet:               true,
 		},
 	},

@@ -29,7 +29,7 @@ type InitOption struct {
 	Sort                  bool   `help:"sort elements in task definition" default:"false" negatable:""`
 	ForceOverwrite        bool   `help:"overwrite existing files" default:"false"`
 	Jsonnet               bool   `help:"output files as jsonnet format" default:"false"`
-	Express               bool   `help:"import express service definition" default:"false" negatable:""`
+	Express               *bool  `help:"import express service definition" negatable:""`
 }
 
 func (opt *InitOption) NewConfig(ctx context.Context, configFilePath string) (*Config, error) {
@@ -75,35 +75,50 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 			conf.path = strings.TrimSuffix(conf.path, ext) + jsonnetExt
 		}
 	}
-	switch {
-	case opt.Express:
-		ex, sv, err := d.initExpressGatewayService(ctx, opt)
-		if err != nil {
-			return err
-		}
-		return d.initConfigurationFile(ctx, conf.path, opt, sv, nil, ex)
-	case tdOnly:
+
+	if tdOnly {
 		tdArn := opt.TaskDefinition
 		td, err := d.initTaskDefinition(ctx, opt, tdArn)
 		if err != nil {
 			return err
 		}
 		return d.initConfigurationFile(ctx, conf.path, opt, nil, td, nil)
-	default:
-		sv, tdArn, err := d.initServiceDefinition(ctx, opt)
-		if err != nil {
-			return err
-		}
-		td, err := d.initTaskDefinition(ctx, opt, tdArn)
-		if err != nil {
-			return err
-		}
-		return d.initConfigurationFile(ctx, conf.path, opt, sv, td, nil)
 	}
+
+	// initialize with service
+	sv, err := d.DescribeService(ctx)
+	if err != nil {
+		return err
+	}
+
+	if sv.isExpressMode() {
+		d.LogInfo("%s is an Express Gateway Service", aws.ToString(sv.ServiceName))
+		if opt.Express == nil || *opt.Express {
+			ex, sv, err := d.initExpressGatewayService(ctx, sv, opt)
+			if err != nil {
+				return err
+			}
+			return d.initConfigurationFile(ctx, conf.path, opt, sv, nil, ex)
+		}
+	} else if opt.Express != nil && *opt.Express {
+		return fmt.Errorf("service %s is not an Express Gateway Service", aws.ToString(sv.ServiceName))
+	}
+
+	sv, tdArn, err := d.initServiceDefinition(ctx, sv, opt)
+	if err != nil {
+		return err
+	}
+
+	td, err := d.initTaskDefinition(ctx, opt, tdArn)
+	if err != nil {
+		return err
+	}
+	return d.initConfigurationFile(ctx, conf.path, opt, sv, td, nil)
 }
 
 func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, opt InitOption, sv *Service, td *TaskDefinitionInput, ex *ExpressGatewayService) error {
 	conf := d.config
+	d.LogInfo("Initializing configuration file to %s...", configFilePath)
 	if ex != nil {
 		// express
 		conf.Service = aws.ToString(sv.ServiceName)
@@ -163,20 +178,10 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 	return nil
 }
 
-func (d *App) initServiceDefinition(ctx context.Context, opt InitOption) (*Service, string, error) {
+func (d *App) initServiceDefinition(ctx context.Context, sv *Service, opt InitOption) (*Service, string, error) {
 	conf := d.config
-	out, err := d.ecs.DescribeServices(ctx, d.DescribeServicesInput())
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to describe service: %w", err)
-	}
-	if len(out.Services) == 0 {
-		return nil, "", ErrNotFound("service is not found")
-	}
+	d.LogInfo("Initializing service definition from the service %s...", aws.ToString(sv.ServiceName))
 
-	sv, err := d.newServiceFromTypes(ctx, out.Services[0])
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to describe service: %w", err)
-	}
 	svArn := aws.ToString(sv.ServiceArn)
 	if long, _ := isLongArnFormat(svArn); long {
 		// Long arn format must be used for tagging operations
@@ -214,6 +219,8 @@ func (d *App) initServiceDefinition(ctx context.Context, opt InitOption) (*Servi
 
 func (d *App) initTaskDefinition(ctx context.Context, opt InitOption, tdArn string) (*TaskDefinitionInput, error) {
 	conf := d.config
+	d.LogInfo("Initializing task definition from the task definition %s...", tdArn)
+
 	td, err := d.DescribeTaskDefinition(ctx, tdArn)
 	if err != nil {
 		return nil, err

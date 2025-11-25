@@ -29,13 +29,10 @@ func (e *ExpressGatewayService) GetTags() []types.Tag {
 	return e.Tags
 }
 
-func (d *App) initExpressGatewayService(ctx context.Context, opt InitOption) (*ExpressGatewayService, *Service, error) {
+func (d *App) initExpressGatewayService(ctx context.Context, sv *Service, opt InitOption) (*ExpressGatewayService, *Service, error) {
 	conf := d.config
+	d.LogInfo("Initializing express definition from the service %s...", aws.ToString(sv.ServiceName))
 
-	sv, err := d.DescribeService(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
 	ex, err := d.DescribeExpressGatewayService(ctx, sv)
 	if err != nil {
 		return nil, nil, err
@@ -193,6 +190,32 @@ func diffExpressGatewayServices(ctx context.Context, local, remote *ExpressGatew
 	}
 }
 
+func exToUpdateExpressGatewayServiceInput(ex *ExpressGatewayService, sv *Service) *ecs.UpdateExpressGatewayServiceInput {
+	in := &ecs.UpdateExpressGatewayServiceInput{
+		ServiceArn:           sv.ServiceArn,
+		Cpu:                  ex.Cpu,
+		Memory:               ex.Memory,
+		HealthCheckPath:      ex.HealthCheckPath,
+		NetworkConfiguration: ex.NetworkConfiguration,
+		ScalingTarget:        ex.ScalingTarget,
+		ExecutionRoleArn:     ex.ExecutionRoleArn,
+		TaskRoleArn:          ex.TaskRoleArn,
+		PrimaryContainer:     ex.PrimaryContainer,
+	}
+
+	// explicitly set empty values to reset them
+	if pc := ex.PrimaryContainer; pc != nil {
+		if len(pc.Environment) == 0 {
+			pc.Environment = []types.KeyValuePair{}
+		}
+		if len(pc.Secrets) == 0 {
+			pc.Secrets = []types.Secret{}
+		}
+	}
+
+	return in
+}
+
 func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt DeployOption) error {
 	if !sv.isExpressMode() {
 		return fmt.Errorf("service %s is not an express mode", aws.ToString(sv.ServiceName))
@@ -205,18 +228,10 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 	if err != nil {
 		return err
 	}
-	in := &ecs.UpdateExpressGatewayServiceInput{
-		ServiceArn:           sv.ServiceArn,
-		Cpu:                  ex.Cpu,
-		Memory:               ex.Memory,
-		HealthCheckPath:      ex.HealthCheckPath,
-		NetworkConfiguration: ex.NetworkConfiguration,
-		ScalingTarget:        ex.ScalingTarget,
-		ExecutionRoleArn:     ex.ExecutionRoleArn,
-		TaskRoleArn:          ex.TaskRoleArn,
-		PrimaryContainer:     ex.PrimaryContainer,
-	}
 	d.LogInfo("Updating express gateway service %s...%s", aws.ToString(sv.ServiceName), opt.DryRunString())
+
+	in := exToUpdateExpressGatewayServiceInput(ex, sv)
+
 	if opt.DryRun {
 		OutputJSONForAPI(os.Stdout, in)
 		return nil
