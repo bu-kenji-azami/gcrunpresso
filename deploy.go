@@ -543,11 +543,11 @@ func (d *App) UpdateServiceTags(ctx context.Context, sv *Service, added, updated
 
 	if len(tags) > 0 {
 		for _, t := range tags {
-			d.LogInfo("updating service tags: %s=%s", aws.ToString(t.Key), aws.ToString(t.Value))
+			d.LogInfo("updating service tags: %s=%s %s", aws.ToString(t.Key), aws.ToString(t.Value), opt.DryRunString())
 		}
 	}
 	if len(untagKeys) > 0 {
-		d.LogInfo("deleting service tags: %v", untagKeys)
+		d.LogInfo("deleting service tags: %v %s", untagKeys, opt.DryRunString())
 	}
 	if opt.DryRun {
 		return nil

@@ -232,9 +232,14 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 
 	in := exToUpdateExpressGatewayServiceInput(ex, sv)
 
+	addedTags, updatedTags, deletedTags := CompareTags(sv.Tags, ex.Tags)
+	doUpdateTags := func() error {
+		return d.UpdateServiceTags(ctx, sv, addedTags, updatedTags, deletedTags, opt)
+	}
+
 	if opt.DryRun {
 		OutputJSONForAPI(os.Stdout, in)
-		return nil
+		return doUpdateTags()
 	}
 	res, err := d.ecs.UpdateExpressGatewayService(ctx, in)
 	if err != nil {
@@ -242,6 +247,11 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 	}
 	d.LogInfo("Express gateway service is updated")
 	d.LogJSON(res.Service)
+
+	// update tags
+	if err := doUpdateTags(); err != nil {
+		return err
+	}
 
 	if !opt.Wait {
 		return nil
