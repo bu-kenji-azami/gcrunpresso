@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.6.5](https://github.com/kayac/ecspresso/compare/v2.6.4...v2.6.5) - 2025-11-28
+- use service.CurrentServiceDeployment for finding current deployment. by @fujiwara in https://github.com/kayac/ecspresso/pull/903
+- Supports ECS Express mode by @fujiwara in https://github.com/kayac/ecspresso/pull/902
+- Bye-bye remaining `interface{}` by @mi-wada in https://github.com/kayac/ecspresso/pull/907
+- verify: Support digest-based image reference by @mi-wada in https://github.com/kayac/ecspresso/pull/908
+- Refactor verify parseImageURL by @fujiwara in https://github.com/kayac/ecspresso/pull/909
+
 ## [v2.6.4](https://github.com/kayac/ecspresso/compare/v2.6.3...v2.6.4) - 2025-11-21
 - Improve deployment strategy log message to support all strategies by @fujiwara in https://github.com/kayac/ecspresso/pull/891
 - fix(diff): When MaximumPercent or MinimumHealthyPercent is nil, set default by @mi-wada in https://github.com/kayac/ecspresso/pull/895
