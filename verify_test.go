@@ -54,7 +54,15 @@ var testImagesIsECR = []struct {
 		isECR: true,
 	},
 	{
+		image: "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage@sha256:xxx",
+		isECR: true,
+	},
+	{
 		image: "ubuntu:latest",
+		isECR: false,
+	},
+	{
+		image: "ubuntu@sha256:8f6a88feef3ed01a300dafb87f208977f39dccda1fd120e878129463f7fa3b8f",
 		isECR: false,
 	},
 	{

@@ -104,8 +104,8 @@ func (c *Repository) login(ctx context.Context, endpoint, service, scope string)
 	return nil
 }
 
-func (c *Repository) fetchManifests(ctx context.Context, method, tag string) (*http.Response, error) {
-	u := fmt.Sprintf("https://%s/v2/%s/manifests/%s", c.host, c.repo, tag)
+func (c *Repository) fetchManifests(ctx context.Context, method, tagOrDigest string) (*http.Response, error) {
+	u := fmt.Sprintf("https://%s/v2/%s/manifests/%s", c.host, c.repo, tagOrDigest)
 	req, err := http.NewRequestWithContext(ctx, method, u, nil)
 	if err != nil {
 		return nil, err
@@ -119,10 +119,10 @@ func (c *Repository) fetchManifests(ctx context.Context, method, tag string) (*h
 	return c.client.Do(req)
 }
 
-func (c *Repository) getAvailability(ctx context.Context, tag string) (*http.Response, error) {
+func (c *Repository) getAvailability(ctx context.Context, tagOrDigest string) (*http.Response, error) {
 	retryer := retryPolicy.Start(ctx)
 	for retryer.Continue() {
-		resp, err := c.fetchManifests(ctx, http.MethodHead, tag)
+		resp, err := c.fetchManifests(ctx, http.MethodHead, tagOrDigest)
 		if err != nil {
 			return nil, err
 		}
@@ -199,9 +199,9 @@ func match(want, got string) bool {
 	return want == "" || want == got
 }
 
-// HasPlatformImage returns an image tag for arch/os exists or not in the repository.
-func (c *Repository) HasPlatformImage(ctx context.Context, tag, arch, os string) (bool, error) {
-	mediaType, rc, err := c.getManifests(ctx, tag)
+// HasPlatformImage returns whether an image with the specified tagOrDigest exists for the given arch/os in the repository.
+func (c *Repository) HasPlatformImage(ctx context.Context, tagOrDigest, arch, os string) (bool, error) {
+	mediaType, rc, err := c.getManifests(ctx, tagOrDigest)
 	if err != nil {
 		return false, err
 	}
@@ -265,12 +265,12 @@ func (c *Repository) HasPlatformImage(ctx context.Context, tag, arch, os string)
 	return false, nil
 }
 
-// HasImage returns an image tag exists or not in the repository.
-func (c *Repository) HasImage(ctx context.Context, tag string) (bool, error) {
+// HasImage returns whether an image with the specified tagOrDigest exists in the repository.
+func (c *Repository) HasImage(ctx context.Context, tagOrDigest string) (bool, error) {
 	tries := 2
 	for tries > 0 {
 		tries--
-		resp, err := c.getAvailability(ctx, tag)
+		resp, err := c.getAvailability(ctx, tagOrDigest)
 		if err != nil {
 			return false, err
 		}

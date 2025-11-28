@@ -641,23 +641,29 @@ func (d *App) verifyECRImage(ctx context.Context, image, region string) error {
 }
 
 func (d *App) verifyRegistryImage(ctx context.Context, image, user, password string) error {
-	rr := strings.SplitN(image, ":", 2)
-	image = rr[0]
-	var tag string
-	if len(rr) == 1 {
-		tag = "latest"
+	var imageName string
+	var tagOrDigest string
+	if idx := strings.Index(image, "@"); idx != -1 {
+		imageName = image[:idx]
+		tagOrDigest = image[idx+1:]
+	} else if idx := strings.LastIndex(image, ":"); idx != -1 && !strings.Contains(image[idx+1:], "/") {
+		// The last colon is a tag separator only if there is no slash after it.
+		// If there is a slash (e.g. "host:443/repo"), the colon indicates a port.
+		imageName = image[:idx]
+		tagOrDigest = image[idx+1:]
 	} else {
-		tag = rr[1]
+		imageName = image
+		tagOrDigest = "latest"
 	}
-	d.LogDebug("image=%s tag=%s", image, tag)
+	d.LogDebug("imageName=%s tagOrDigest=%s", imageName, tagOrDigest)
 
-	repo := registry.New(image, user, password)
-	ok, err := repo.HasImage(ctx, tag)
+	repo := registry.New(imageName, user, password)
+	ok, err := repo.HasImage(ctx, tagOrDigest)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("%s:%s is not found in Registry", image, tag)
+		return fmt.Errorf("%s is not found in Registry", image)
 	}
 
 	td, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
@@ -674,7 +680,7 @@ func (d *App) verifyRegistryImage(ctx context.Context, image, user, password str
 	if arch == "" && os == "" {
 		return nil
 	}
-	ok, err = repo.HasPlatformImage(ctx, tag, arch, os)
+	ok, err = repo.HasPlatformImage(ctx, tagOrDigest, arch, os)
 	if err != nil {
 		if errors.Is(err, registry.ErrDeprecatedManifest) || errors.Is(err, registry.ErrPullRateLimitExceeded) {
 			return ErrSkipVerify(err.Error())
@@ -684,7 +690,7 @@ func (d *App) verifyRegistryImage(ctx context.Context, image, user, password str
 	if ok {
 		return nil
 	}
-	return fmt.Errorf("%s:%s for arch=%s os=%s is not found in Registry", image, tag, arch, os)
+	return fmt.Errorf("%s for arch=%s os=%s is not found in Registry", image, arch, os)
 }
 
 func (d *App) isFargateService() (bool, error) {
