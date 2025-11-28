@@ -16,6 +16,7 @@ var (
 	ToNumberMemory      = toNumberMemory
 	CalcDesiredCount    = calcDesiredCount
 	ParseTags           = parseTags
+	ParseImageURL       = parseImageURL
 	ExtractRoleName     = extractRoleName
 	IsLongArnFormat     = isLongArnFormat
 	ECRImageURLRegex    = ecrImageURLRegex
