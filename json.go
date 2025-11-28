@@ -136,7 +136,7 @@ func jqFilter(m map[string]any, q string) (map[string]any, error) {
 			return nil, err
 		}
 		if m, ok = v.(map[string]any); !ok {
-			return nil, fmt.Errorf("query result is not map[string]interface{}: %v", v)
+			return nil, fmt.Errorf("query result is not map[string]any: %v", v)
 		}
 	}
 	return m, nil
