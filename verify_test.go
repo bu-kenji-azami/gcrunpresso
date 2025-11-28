@@ -165,6 +165,52 @@ func TestParseRoleArn(t *testing.T) {
 	}
 }
 
+var imageURLTestCases = []struct {
+	imageURL            string
+	expectedImageName   string
+	expectedTagOrDigest string
+}{
+	{
+		imageURL:            "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage",
+		expectedImageName:   "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage",
+		expectedTagOrDigest: "latest",
+	},
+	{
+		imageURL:            "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage:foobar",
+		expectedImageName:   "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage",
+		expectedTagOrDigest: "foobar",
+	},
+	{
+		imageURL:            "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		expectedImageName:   "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/myimage",
+		expectedTagOrDigest: "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+	},
+	{
+		imageURL:            "example.com:443/repo/image:tag",
+		expectedImageName:   "example.com:443/repo/image",
+		expectedTagOrDigest: "tag",
+	},
+	{
+		imageURL:            "example.com:443/repo/image@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		expectedImageName:   "example.com:443/repo/image",
+		expectedTagOrDigest: "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+	},
+}
+
+func TestParseImageURL(t *testing.T) {
+	for _, tc := range imageURLTestCases {
+		t.Run(tc.imageURL, func(t *testing.T) {
+			imageName, tagOrDigest := ecspresso.ParseImageURL(tc.imageURL)
+			if imageName != tc.expectedImageName {
+				t.Errorf("unexpected imageName got:%s expected:%s", imageName, tc.expectedImageName)
+			}
+			if tagOrDigest != tc.expectedTagOrDigest {
+				t.Errorf("unexpected tagOrDigest got:%s expected:%s", tagOrDigest, tc.expectedTagOrDigest)
+			}
+		})
+	}
+}
+
 func TestIsECRImage(t *testing.T) {
 	for _, s := range testImagesIsECR {
 		isECR := ecspresso.ECRImageURLRegex.MatchString(s.image)

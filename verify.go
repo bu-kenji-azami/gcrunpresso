@@ -641,20 +641,7 @@ func (d *App) verifyECRImage(ctx context.Context, image, region string) error {
 }
 
 func (d *App) verifyRegistryImage(ctx context.Context, image, user, password string) error {
-	var imageName string
-	var tagOrDigest string
-	if idx := strings.Index(image, "@"); idx != -1 {
-		imageName = image[:idx]
-		tagOrDigest = image[idx+1:]
-	} else if idx := strings.LastIndex(image, ":"); idx != -1 && !strings.Contains(image[idx+1:], "/") {
-		// The last colon is a tag separator only if there is no slash after it.
-		// If there is a slash (e.g. "host:443/repo"), the colon indicates a port.
-		imageName = image[:idx]
-		tagOrDigest = image[idx+1:]
-	} else {
-		imageName = image
-		tagOrDigest = "latest"
-	}
+	imageName, tagOrDigest := parseImageURL(image)
 	d.LogDebug("imageName=%s tagOrDigest=%s", imageName, tagOrDigest)
 
 	repo := registry.New(imageName, user, password)
@@ -930,4 +917,17 @@ func parseIAMPolicyDocument(s string) (*iamPolicyDocument, error) {
 		return nil, err
 	}
 	return &doc, nil
+}
+
+func parseImageURL(image string) (imageName string, tagOrDigest string) {
+	if strings.Contains(image, "@sha256:") {
+		p := strings.SplitN(image, "@", 2)
+		return p[0], p[1]
+	} else if idx := strings.LastIndex(image, ":"); idx != -1 && !strings.Contains(image[idx+1:], "/") {
+		// The last colon is a tag separator only if there is no slash after it.
+		// If there is a slash (e.g. "host:443/repo"), the colon indicates a port.
+		return image[:idx], image[idx+1:]
+	} else {
+		return image, "latest"
+	}
 }
