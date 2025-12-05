@@ -1,6 +1,5 @@
 GIT_VER ?= $(shell git describe --tags | sed -e 's/-/+/')
 DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
-export GO111MODULE := on
 
 .PHONY: test binary install clean
 
@@ -33,3 +32,15 @@ orb/publish:
 
 orb/promote:
 	circleci orb publish promote $(ORB_NAMESPACE)/ecspresso@dev:latest patch
+
+image-push: dist/
+	docker buildx build --platform linux/amd64,linux/arm64 \
+	-t ghcr.io/kayac/ecspresso:$(IMAGE_VERSION) \
+	--push \
+	-f Dockerfile .
+
+image-load: dist/
+	docker buildx build --platform linux/amd64 \
+	-t ghcr.io/kayac/ecspresso:$(IMAGE_VERSION) \
+	--load \
+	-f Dockerfile .
