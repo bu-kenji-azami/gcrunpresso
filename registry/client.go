@@ -188,8 +188,8 @@ func (c *Repository) setAuthHeader(req *http.Request) {
 
 func parseContentType(contentType string) (mediaType string) {
 	mediaType = contentType
-	if i := strings.IndexByte(contentType, ';'); i != -1 {
-		mediaType = contentType[0:i]
+	if before, _, ok := strings.Cut(contentType, ";"); ok {
+		mediaType = before
 	}
 	return
 }

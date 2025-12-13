@@ -294,7 +294,7 @@ func TestDiffServices(t *testing.T) {
 			t.Errorf("unexpected diff: %s", ds)
 		}
 		minusDiffs := 0
-		for _, line := range strings.Split(ds, "\n") {
+		for line := range strings.SplitSeq(ds, "\n") {
 			if strings.HasPrefix(line, "-") {
 				minusDiffs++
 			}
@@ -416,7 +416,7 @@ func TestDiffTaskDefs(t *testing.T) {
 			t.Errorf("unexpected diff: %s", ds)
 		}
 		minusDiffs := 0
-		for _, line := range strings.Split(ds, "\n") {
+		for line := range strings.SplitSeq(ds, "\n") {
 			if strings.HasPrefix(line, "-") {
 				minusDiffs++
 			}

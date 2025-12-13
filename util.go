@@ -51,8 +51,8 @@ func parseTags(s string) ([]types.Tag, error) {
 		return tags, nil
 	}
 
-	tagsStr := strings.Split(s, ",")
-	for _, tag := range tagsStr {
+	tagsStr := strings.SplitSeq(s, ",")
+	for tag := range tagsStr {
 		if tag == "" {
 			continue
 		}
