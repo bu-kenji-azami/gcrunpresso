@@ -901,7 +901,7 @@ See also [Use Amazon VPC Lattice to connect, observe, and secure your Amazon ECS
 
 ### ECS Express mode support
 
-ecspresso supports [ECS Express](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express.html) mode, which provides a simplified way to deploy ECS services with a single definition file instead of separate task and service definitions.
+ecspresso supports [ECS Express](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-overview.html) mode, which provides a simplified way to deploy ECS services with a single definition file instead of separate task and service definitions.
 
 #### Supported commands
 
