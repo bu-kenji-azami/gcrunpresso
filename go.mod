@@ -31,13 +31,13 @@ require (
 	github.com/fujiwara/sloghandler v0.0.3
 	github.com/fujiwara/ssm-lookup v0.1.1
 	github.com/fujiwara/tfstate-lookup v1.7.0
-	github.com/goccy/go-yaml v1.12.0
+	github.com/goccy/go-yaml v1.19.0
 	github.com/google/go-cmp v0.6.0
-	github.com/google/go-jsonnet v0.20.0
+	github.com/google/go-jsonnet v0.21.0
 	github.com/hashicorp/go-envparse v0.1.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/itchyny/gojq v0.12.16
+	github.com/itchyny/gojq v0.12.18
 	github.com/kayac/go-config v0.7.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.20
@@ -45,8 +45,8 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/samber/lo v1.46.0
-	github.com/schollz/progressbar/v3 v3.14.6
-	github.com/shogo82148/go-retry v1.1.1
+	github.com/schollz/progressbar/v3 v3.18.0
+	github.com/shogo82148/go-retry v1.3.1
 	golang.org/x/sys v0.38.0
 )
 
@@ -86,6 +86,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sns v1.26.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.8 // indirect
+	github.com/clipperhouse/stringish v0.1.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/creack/pty v1.1.20 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -106,10 +108,10 @@ require (
 	github.com/hashicorp/go-slug v0.16.4 // indirect
 	github.com/hashicorp/go-tfe v1.84.0 // indirect
 	github.com/hashicorp/jsonapi v1.4.3-0.20250220162346-81a76b606f3e // indirect
-	github.com/itchyny/timefmt-go v0.1.6 // indirect
+	github.com/itchyny/timefmt-go v0.1.7 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -130,7 +132,6 @@ require (
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.155.0 // indirect
 	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240123012728-ef4313101c80 // indirect
@@ -138,5 +139,5 @@ require (
 	google.golang.org/grpc v1.62.1 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
 )
