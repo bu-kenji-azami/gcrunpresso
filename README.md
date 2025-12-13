@@ -83,6 +83,24 @@ $ aqua g -i kayac/ecspresso
 
 [Releases](https://github.com/kayac/ecspresso/releases)
 
+### Docker image
+
+Docker images are available on GitHub Container Registry.
+
+```console
+$ docker pull ghcr.io/kayac/ecspresso:v2.7.0
+```
+
+The image is based on `gcr.io/distroless/static-debian12` and supports both `linux/amd64` and `linux/arm64` architectures.
+
+```console
+$ docker run --rm \
+    -v ~/.aws:/root/.aws:ro \
+    -v $(pwd):/work \
+    -w /work \
+    ghcr.io/kayac/ecspresso:v2.7.0 deploy --config ecspresso.yml
+```
+
 ### CircleCI Orbs
 
 https://circleci.com/orbs/registry/orb/fujiwara/ecspresso
