@@ -4,6 +4,47 @@ ecspresso is a deployment tool for Amazon ECS.
 
 (pronounced the same as "espresso" :coffee:)
 
+ecspresso allows you to manage ECS services and task definitions as code in JSON, YAML, or Jsonnet files, enabling version control and infrastructure as code practices. You can generate configuration files from existing ECS services using `ecspresso init`, making it easy to start managing your infrastructure.
+
+Definition files support template syntax and Jsonnet native functions to embed environment variables, Terraform state values, SSM parameters, and Secrets Manager ARNs. ecspresso supports multiple deployment strategies including rolling updates and Blue/Green deployments with both ECS native and CodeDeploy controllers. Before deploying, you can preview changes with `diff` and validate configurations with `verify`. If something goes wrong, `rollback` helps you safely revert to a previous state.
+
+ecspresso also supports ECS Express mode for simplified deployments and provides a plugin system for extending functionality.
+
+## Table of Contents
+
+- [Documents](#documents)
+- [Install](#install)
+- [Usage](#usage)
+- [Quick Start](#quick-start)
+- [Configuration file](#configuration-file)
+- [Template syntax](#template-syntax)
+- [Deployment](#example-of-deployment)
+  - [Rolling deployment](#rolling-deployment)
+  - [Blue/Green deployment (ECS)](#bluegreen-deployment-with-ecs-deployment-controller)
+  - [Blue/Green deployment (CodeDeploy)](#bluegreen-deployment-with-aws-codedeploy)
+- [Scale out/in](#scale-outin)
+- [Rollback](#rollback)
+- [Run task](#example-of-run-task)
+- [Notes](#notes)
+  - [Version constraint](#version-constraint)
+  - [Manage Application Auto Scaling](#manage-application-auto-scaling)
+  - [Jsonnet support](#use-jsonnet-instead-of-json-and-yaml)
+  - [Deploy to Fargate](#deploy-to-fargate)
+  - [Fargate Spot support](#fargate-spot-support)
+  - [ECS Service Connect support](#ecs-service-connect-support)
+  - [EBS Volume support](#ebs-volume-support)
+  - [VPC Lattice support](#vpc-lattice-support)
+  - [ECS Express mode support](#ecs-express-mode-support)
+  - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
+  - [Manipulate ECS tasks](#manipulate-ecs-tasks)
+- [Plugins](#plugins)
+  - [tfstate](#tfstate)
+  - [CloudFormation](#cloudformation)
+  - [SSM Parameter Store](#ssm-parameter-store-lookups)
+  - [Secrets Manager](#resolve-secretsmanager-secret-arn)
+  - [External commands](#execute-external-commands)
+- [LICENSE](#license)
+
 ## Documents
 
 - [Differences between v1 and v2](docs/v1-v2.md).
@@ -839,6 +880,96 @@ ecspresso supports [VPC Lattice](https://aws.amazon.com/vpc/lattice/) integratio
 ecspresso doesn't create or modify any VPC Lattice resources. You must create and associate a VPC Lattice target group with the ECS service.
 
 See also [Use Amazon VPC Lattice to connect, observe, and secure your Amazon ECS services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-vpc-lattice.html).
+
+### ECS Express mode support
+
+ecspresso supports [ECS Express](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express.html) mode, which provides a simplified way to deploy ECS services with a single definition file instead of separate task and service definitions.
+
+#### Supported commands
+
+The following commands work with Express mode:
+
+- `init --express` - Import an existing Express service into definition files
+- `deploy` - Create or update Express services
+- `diff` - Show differences between local and remote Express definitions
+- `render expressdef` - Render an Express definition file
+- `delete` - Delete an Express service
+- `status` - Show Express service status including ingress paths
+- `rollback` - Partial support (works only during active deployments)
+- `verify` - Verify resources in Express definition
+- `exec`, `refresh`, `tasks`, `wait` - Also supported
+
+#### Unsupported commands
+
+Some commands do not work with Express mode: `scale`, `run`, `revisions`, `register`, `deregister`, `appspec`.
+
+#### Configuration
+
+To use Express mode, specify `express_definition` instead of `task_definition` and `service_definition` in your config file:
+
+```yaml
+# ecspresso.yml
+region: ap-northeast-1
+cluster: ecspresso
+service: myservice
+express_definition: ecs-express-def.json
+```
+
+#### Minimal Express definition
+
+```json
+{
+  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
+  "infrastructureRoleArn": "arn:aws:iam::123456789012:role/ecsInfrastructureRoleForExpressServices",
+  "primaryContainer": {
+    "image": "nginx:latest"
+  }
+}
+```
+
+#### Full Express definition example
+
+```jsonnet
+// ecs-express-def.jsonnet
+{
+  cpu: '256',
+  memory: '512',
+  executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+  taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+  infrastructureRoleArn: 'arn:aws:iam::123456789012:role/ecsInfrastructureRoleForExpressServices',
+  healthCheckPath: '/',
+  networkConfiguration: {
+    securityGroups: ['sg-00123456789abcdef'],
+    subnets: ['subnet-00123456789abcdef', 'subnet-0123456789abcdef0'],
+  },
+  primaryContainer: {
+    image: 'nginx:latest',
+    containerPort: 80,
+    environment: [
+      { name: 'ENV', value: 'production' },
+    ],
+    awsLogsConfiguration: {
+      logGroup: '/aws/ecs/myservice',
+      logStreamPrefix: 'ecs',
+    },
+  },
+  scalingTarget: {
+    autoScalingMetric: 'AVERAGE_CPU',
+    autoScalingTargetValue: 60,
+    minTaskCount: 1,
+    maxTaskCount: 10,
+  },
+  tags: [
+    { key: 'Environment', value: 'production' },
+  ],
+}
+```
+
+#### Migration from Express mode
+
+Existing ECS Express services can be imported as non-express (normal) mode by `ecspresso init --no-express`. This creates standard definition files (`ecspresso.yml`, `ecs-service-def.json`, and `ecs-task-def.json`).
+
+Note: ECS Express mode cannot update `deploymentConfiguration` and `loadBalancers` in a service definition. `ecspresso init --no-express` also omits these fields.
 
 ### How to check diff and verify service/task definitions before deploy.
 
