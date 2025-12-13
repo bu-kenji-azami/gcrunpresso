@@ -465,7 +465,7 @@ func (d *App) createDeployment(ctx context.Context, sv *Service, taskDefinitionA
 	}
 	if rollbackEvents != "" {
 		var events []cdTypes.AutoRollbackEvent
-		for _, ev := range strings.Split(rollbackEvents, ",") {
+		for ev := range strings.SplitSeq(rollbackEvents, ",") {
 			switch ev {
 			case "DEPLOYMENT_FAILURE":
 				events = append(events, cdTypes.AutoRollbackEventDeploymentFailure)
