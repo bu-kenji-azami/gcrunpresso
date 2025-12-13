@@ -1,5 +1,17 @@
 # Changelog
 
+## [v2.7.0](https://github.com/kayac/ecspresso/compare/v2.6.5...v2.7.0) - 2025-12-13
+- Docker image by @fujiwara in https://github.com/kayac/ecspresso/pull/913
+- release docker images by @fujiwara in https://github.com/kayac/ecspresso/pull/915
+- Bump actions/setup-go from 5.5.0 to 6.1.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/911
+- Bump actions/checkout from 4.2.2 to 6.0.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/910
+- Bump Songmu/tagpr from 1.8.4 to 1.9.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/881
+- Bump Go modules by @fujiwara in https://github.com/kayac/ecspresso/pull/916
+- Supports Express mode with definition files. by @fujiwara in https://github.com/kayac/ecspresso/pull/905
+- fix: modernize by @fujiwara in https://github.com/kayac/ecspresso/pull/917
+- update to tfstate-lookup v1.8.1 by @fujiwara in https://github.com/kayac/ecspresso/pull/918
+- docs: update README with Express mode, table of contents, and Docker image by @fujiwara in https://github.com/kayac/ecspresso/pull/919
+
 ## [v2.6.5](https://github.com/kayac/ecspresso/compare/v2.6.4...v2.6.5) - 2025-11-28
 - use service.CurrentServiceDeployment for finding current deployment. by @fujiwara in https://github.com/kayac/ecspresso/pull/903
 - Supports ECS Express mode by @fujiwara in https://github.com/kayac/ecspresso/pull/902
