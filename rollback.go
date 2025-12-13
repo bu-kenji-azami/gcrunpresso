@@ -139,6 +139,20 @@ func (d *App) RollbackServiceTasks(ctx context.Context, sv *Service, targetArn s
 	return currentArn, nil
 }
 
+func (d *App) RollbackExpressService(ctx context.Context, sv *Service, _ string, opt RollbackOption) (string, error) {
+	deploymentArn, err := d.findActiveECSDeploymentArn(ctx, 0)
+	if err != nil {
+		var errNotFound ErrNotFound
+		if errors.As(err, &errNotFound) {
+			return "", errors.New("no active service deployment found")
+		}
+		return "", err
+	}
+
+	d.LogInfo("Active deployment found, rolling back deployment %s %s", arnToName(deploymentArn), opt.DryRunString())
+	return d.rollbackActiveECSDeployment(ctx, sv, deploymentArn, opt)
+}
+
 func (d *App) RollbackECSService(ctx context.Context, sv *Service, targetArn string, opt RollbackOption) (string, error) {
 	// Check if there's an active deployment in progress
 	deploymentArn, err := d.findActiveECSDeploymentArn(ctx, 0)
@@ -256,6 +270,9 @@ func (d *App) RollbackFunc(sv *Service) (rollbackFunc, error) {
 	defaultFunc := d.RollbackServiceTasks
 	if sv == nil || sv.DeploymentController == nil {
 		return defaultFunc, nil
+	}
+	if sv.isExpressMode() {
+		return d.RollbackExpressService, nil
 	}
 	if dc := sv.DeploymentController; dc != nil {
 		switch dc.Type {

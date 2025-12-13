@@ -94,9 +94,18 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	if err != nil {
 		if errors.As(err, &errNotFound) {
 			d.LogInfo("Service %s not found. Creating a new service %s", d.Service, opt.DryRunString())
-			return d.createService(ctx, opt)
+			if d.config.isExpressMode() {
+				return d.createExpressGatewayService(ctx, opt)
+			} else {
+				return d.createService(ctx, opt)
+			}
 		}
 		return err
+	}
+
+	// express mode is handled here
+	if d.config.isExpressMode() {
+		return d.DeployExpressGatewayService(ctx, sv, opt)
 	}
 
 	doDeploy, err := d.DeployFunc(sv)
@@ -244,7 +253,7 @@ func svToUpdateServiceInput(sv *Service) *ecs.UpdateServiceInput {
 	}
 
 	// in Express Mode, cannot update some configurations
-	if sv.ResourceManagementType == types.ResourceManagementTypeEcs {
+	if sv.isExpressMode() {
 		in.DeploymentConfiguration = nil
 		in.LoadBalancers = nil
 	}
@@ -502,6 +511,7 @@ type deployFunc func(ctx context.Context, taskDefinitionArn string, count *int32
 
 func (d *App) DeployFunc(sv *Service) (deployFunc, error) {
 	defaultFunc := d.UpdateServiceTasks
+
 	if sv == nil || sv.DeploymentController == nil {
 		return defaultFunc, nil
 	}
@@ -533,11 +543,11 @@ func (d *App) UpdateServiceTags(ctx context.Context, sv *Service, added, updated
 
 	if len(tags) > 0 {
 		for _, t := range tags {
-			d.LogInfo("updating service tags: %s=%s", aws.ToString(t.Key), aws.ToString(t.Value))
+			d.LogInfo("updating service tags: %s=%s %s", aws.ToString(t.Key), aws.ToString(t.Value), opt.DryRunString())
 		}
 	}
 	if len(untagKeys) > 0 {
-		d.LogInfo("deleting service tags: %v", untagKeys)
+		d.LogInfo("deleting service tags: %v %s", untagKeys, opt.DryRunString())
 	}
 	if opt.DryRun {
 		return nil
