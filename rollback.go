@@ -353,6 +353,10 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 		if err != nil {
 			return "", fmt.Errorf("failed to list service deployments: %w", err)
 		}
+		d.LogDebug("found %d active service deployments", len(resp.ServiceDeployments))
+		for _, sd := range resp.ServiceDeployments {
+			d.LogDebug(" service deployment: %s created at %s", aws.ToString(sd.ServiceDeploymentArn), sd.CreatedAt)
+		}
 		// found active deployments started after the application started
 		activeDeployments = append(activeDeployments,
 			lo.Filter(resp.ServiceDeployments, func(item types.ServiceDeploymentBrief, _ int) bool {
@@ -372,6 +376,10 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 			d.LogDebug("no active service deployments found, retrying...")
 			sleepContext(ctx, delayForServiceChanged)
 		}
+	}
+
+	for _, sd := range activeDeployments {
+		d.LogDebug(" active service deployment: %s created at %s", aws.ToString(sd.ServiceDeploymentArn), sd.CreatedAt)
 	}
 
 	// Find the most recent active deployment
