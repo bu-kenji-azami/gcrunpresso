@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: "10 0 * * *"
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build from"
+        default: "v2"
+        required: false
 
 jobs:
   release:
@@ -17,7 +22,7 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v5
         with:
-          ref: v2
+          ref: ${{ github.event.inputs.ref }}
           fetch-depth: 0 # it is required for the changelog to work correctly.
 
       - name: Set env
