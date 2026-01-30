@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1042,11 +1043,35 @@ func (d *App) verifyRole(ctx context.Context, roleArn, principalService string) 
 		return fmt.Errorf("failed to parse IAM policy document: %w", err)
 	}
 	for _, st := range doc.Statement {
-		if st.Principal.Service == principalService && st.Action == "sts:AssumeRole" {
+		if st.Principal.Service.contains(principalService) && st.Action.contains("sts:AssumeRole") {
 			return nil
 		}
 	}
 	return fmt.Errorf("role %s has not a valid policy document", roleName)
+}
+
+// stringOrSlice is a type that can unmarshal from either a string or an array of strings.
+// IAM policy documents allow both formats for fields like Principal.Service and Action.
+type stringOrSlice []string
+
+func (s *stringOrSlice) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*s = []string{str}
+		return nil
+	}
+	// Try to unmarshal as an array of strings
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	*s = arr
+	return nil
+}
+
+func (s stringOrSlice) contains(v string) bool {
+	return slices.Contains(s, v)
 }
 
 type iamPolicyDocument struct {
@@ -1054,9 +1079,9 @@ type iamPolicyDocument struct {
 	Statement []struct {
 		Effect    string `json:"Effect"`
 		Principal struct {
-			Service string `json:"Service"`
+			Service stringOrSlice `json:"Service"`
 		} `json:"Principal"`
-		Action string `json:"Action"`
+		Action stringOrSlice `json:"Action"`
 	} `json:"Statement"`
 }
 
