@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2.7.1](https://github.com/kayac/ecspresso/compare/v2.7.0...v2.7.1) - 2026-02-05
+- add debug logs by @fujiwara in https://github.com/kayac/ecspresso/pull/930
+- fix verify to parse IAM Trust Policy with array format Principal.Service by @fujiwara in https://github.com/kayac/ecspresso/pull/932
+
 ## [v2.7.0](https://github.com/kayac/ecspresso/compare/v2.6.5...v2.7.0) - 2025-12-13
 - Docker image by @fujiwara in https://github.com/kayac/ecspresso/pull/913
 - release docker images by @fujiwara in https://github.com/kayac/ecspresso/pull/915
