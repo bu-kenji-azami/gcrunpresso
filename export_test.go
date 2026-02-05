@@ -11,30 +11,37 @@ import (
 )
 
 var (
-	SortTaskDefinition  = sortTaskDefinition
-	ToNumberCPU         = toNumberCPU
-	ToNumberMemory      = toNumberMemory
-	CalcDesiredCount    = calcDesiredCount
-	ParseTags           = parseTags
-	ParseImageURL       = parseImageURL
-	ExtractRoleName     = extractRoleName
-	IsLongArnFormat     = isLongArnFormat
-	ECRImageURLRegex    = ecrImageURLRegex
-	NewLogger           = newLogger
-	NewConfigLoader     = newConfigLoader
-	LogLevel            = logLevel
-	SetLogFormat        = setLogFormat
-	NewVerifier         = newVerifier
-	ArnToName           = arnToName
-	NewVerifyState      = newVerifyState
-	Map2str             = map2str
-	DiffServices        = diffServices
-	DiffTaskDefs        = diffTaskDefs
-	IsPermissionError   = isPermissionError
-	WrapPermissionError = wrapPermissionError
+	SortTaskDefinition     = sortTaskDefinition
+	ToNumberCPU            = toNumberCPU
+	ToNumberMemory         = toNumberMemory
+	CalcDesiredCount       = calcDesiredCount
+	ParseTags              = parseTags
+	ParseImageURL          = parseImageURL
+	ExtractRoleName        = extractRoleName
+	IsLongArnFormat        = isLongArnFormat
+	ECRImageURLRegex       = ecrImageURLRegex
+	NewLogger              = newLogger
+	NewConfigLoader        = newConfigLoader
+	LogLevel               = logLevel
+	SetLogFormat           = setLogFormat
+	NewVerifier            = newVerifier
+	ArnToName              = arnToName
+	NewVerifyState         = newVerifyState
+	Map2str                = map2str
+	DiffServices           = diffServices
+	DiffTaskDefs           = diffTaskDefs
+	IsPermissionError      = isPermissionError
+	WrapPermissionError    = wrapPermissionError
+	ParseIAMPolicyDocument = parseIAMPolicyDocument
 )
 
 type ModifyAutoScalingParams = modifyAutoScalingParams
+type IAMPolicyDocument = iamPolicyDocument
+type StringOrSlice = stringOrSlice
+
+func (s StringOrSlice) Contains(v string) bool {
+	return s.contains(v)
+}
 
 func (d *App) SetLogger(logger *slog.Logger) {
 	d.logger = logger
