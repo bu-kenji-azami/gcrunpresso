@@ -800,6 +800,11 @@ var cliTests = []struct {
 		subOption: &ecspresso.DocsOption{Article: "readme", Index: true, JSON: true},
 	},
 	{
+		args:      []string{"docs", "--article", "skill"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "skill"},
+	},
+	{
 		args: []string{"diff"},
 		sub:  "diff",
 		subOption: &ecspresso.DiffOption{

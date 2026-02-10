@@ -153,6 +153,26 @@ func TestDocsSearchNoMatch(t *testing.T) {
 	}
 }
 
+func TestParseSectionsSkill(t *testing.T) {
+	content := ecspresso.SkillContent
+	sections := ecspresso.ParseSections(content)
+
+	if len(sections) == 0 {
+		t.Fatal("expected non-zero sections from SKILL.md")
+	}
+
+	titles := make(map[string]bool)
+	for _, s := range sections {
+		titles[s.Title] = true
+	}
+
+	for _, expected := range []string{"ecspresso Skill for LLM Agents", "Common workflows", "Configuration structure"} {
+		if !titles[expected] {
+			t.Errorf("expected heading %q not found in SKILL.md sections", expected)
+		}
+	}
+}
+
 func TestDocsOptionDefault(t *testing.T) {
 	want := &ecspresso.DocsOption{
 		Article: "readme",

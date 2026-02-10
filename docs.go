@@ -10,7 +10,7 @@ import (
 
 // DocsOption defines CLI options for the docs subcommand.
 type DocsOption struct {
-	Article string `help:"article name to display" default:"readme" enum:"readme"`
+	Article string `help:"article name to display" default:"readme" enum:"readme,skill"`
 	Index   bool   `help:"show table of contents" default:"false"`
 	Search  string `help:"search keyword in documents" default:""`
 	JSON    bool   `help:"output in JSON format" default:"false" name:"json"`
@@ -53,6 +53,8 @@ func getArticle(name string) (string, error) {
 	switch name {
 	case "readme":
 		return readmeContent, nil
+	case "skill":
+		return skillContent, nil
 	default:
 		return "", fmt.Errorf("unknown article: %s", name)
 	}

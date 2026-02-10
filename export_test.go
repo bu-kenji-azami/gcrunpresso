@@ -35,6 +35,7 @@ var (
 	ParseIAMPolicyDocument = parseIAMPolicyDocument
 	ParseSections          = parseSections
 	ReadmeContent          = readmeContent
+	SkillContent           = skillContent
 )
 
 type ModifyAutoScalingParams = modifyAutoScalingParams
