@@ -37,6 +37,7 @@ ecspresso also supports ECS Express mode for simplified deployments and provides
   - [ECS Express mode support](#ecs-express-mode-support)
   - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
   - [Manipulate ECS tasks](#manipulate-ecs-tasks)
+  - [Show documentation](#show-documentation)
 - [Plugins](#plugins)
   - [tfstate](#tfstate)
   - [CloudFormation](#cloudformation)
@@ -217,6 +218,9 @@ Commands:
   diff
     show diff between task definition, service definition with current running
     service and task definition
+
+  docs
+    show documentation for ecspresso
 
   exec
     execute command on task
@@ -1148,6 +1152,44 @@ The `-L` option is a short expression for `local-port:host:port`. For example, `
 ```
 $ ecspresso exec --port-forward -L 8080:example.com:80
 ```
+
+### Show documentation
+
+The `docs` command shows the embedded documentation (this README) directly from the ecspresso binary. This command does not require AWS credentials or a configuration file.
+
+```
+Flags:
+      --article="readme"          article name to display
+      --index                     show table of contents
+      --search=""                 search keyword in documents
+      --json                      output in JSON format
+```
+
+Show the full README:
+
+```console
+$ ecspresso docs
+```
+
+Show the table of contents with section headings and line numbers:
+
+```console
+$ ecspresso docs --index
+```
+
+Search for sections containing a keyword (case-insensitive):
+
+```console
+$ ecspresso docs --search "fargate"
+```
+
+Output in JSON format (useful for LLM agents and other tools):
+
+```console
+$ ecspresso docs --search "deploy" --json
+```
+
+The JSON output contains structured sections with `level`, `title`, `content`, and `line` fields, making it easy for automated tools and LLM agents to consume ecspresso documentation programmatically.
 
 ## Plugins
 

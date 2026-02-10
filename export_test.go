@@ -33,6 +33,8 @@ var (
 	IsPermissionError      = isPermissionError
 	WrapPermissionError    = wrapPermissionError
 	ParseIAMPolicyDocument = parseIAMPolicyDocument
+	ParseSections          = parseSections
+	ReadmeContent          = readmeContent
 )
 
 type ModifyAutoScalingParams = modifyAutoScalingParams
