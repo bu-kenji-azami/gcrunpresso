@@ -38,6 +38,7 @@ ecspresso also supports ECS Express mode for simplified deployments and provides
   - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
   - [Manipulate ECS tasks](#manipulate-ecs-tasks)
   - [Show documentation](#show-documentation)
+  - [LLM agent integration](#llm-agent-integration)
 - [Plugins](#plugins)
   - [tfstate](#tfstate)
   - [CloudFormation](#cloudformation)
@@ -1190,6 +1191,17 @@ $ ecspresso docs --search "deploy" --json
 ```
 
 The JSON output contains structured sections with `level`, `title`, `content`, and `line` fields, making it easy for automated tools and LLM agents to consume ecspresso documentation programmatically.
+
+### LLM agent integration
+
+ecspresso provides [`skills/SKILL.md`](skills/SKILL.md) as a guide for LLM agents (such as Claude Code, ChatGPT, etc.) to use ecspresso effectively. The skill file covers common workflows, command usage patterns, and best practices including the recommendation to use Jsonnet over JSON/YAML for definition files.
+
+To integrate ecspresso with an LLM agent:
+
+1. Include `skills/SKILL.md` in the agent's context (e.g., via CLAUDE.md, system prompt, or tool description).
+2. The agent can then use `ecspresso docs --search "<keyword>" --json` to look up specific topics at runtime.
+
+This combination allows an LLM agent to deploy, manage, and troubleshoot ECS services through ecspresso with minimal human guidance.
 
 ## Plugins
 
