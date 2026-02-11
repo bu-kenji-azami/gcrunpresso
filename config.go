@@ -183,7 +183,7 @@ func (c *Config) Restrict(ctx context.Context) error {
 		return fmt.Errorf("failed to setup plugins: %w", err)
 	}
 	if c.FilterCommand != "" {
-		LogWarn("filter_command is deprecated. Use environment variable or CLI flag instead.")
+		LogWarn("filter_command is deprecated, use environment variable or CLI flag instead")
 	}
 	return nil
 }
@@ -192,7 +192,7 @@ func (c *Config) AssumeRole(assumeRoleARN string) {
 	if assumeRoleARN == "" {
 		return
 	}
-	LogInfo("assume role: %s", assumeRoleARN)
+	LogInfo("assuming role", "role", assumeRoleARN)
 	stsClient := sts.NewFromConfig(c.awsv2Config)
 	assumeRoleProvider := stscreds.NewAssumeRoleProvider(stsClient, assumeRoleARN)
 	c.awsv2Config.Credentials = aws.NewCredentialsCache(assumeRoleProvider)
@@ -219,7 +219,7 @@ func (c *Config) ValidateVersion(version string) error {
 	}
 	v, err := goVersion.NewVersion(version)
 	if err != nil {
-		LogWarn("Invalid version format \"%s\". Skip checking required_version.", version)
+		LogWarn("invalid version format, skipping required_version check", "version", version)
 		// invalid version string (e.g. "current") always allowed
 		return nil
 	}

@@ -1,8 +1,6 @@
 module github.com/kayac/ecspresso/v2
 
-go 1.24.0
-
-toolchain go1.24.7
+go 1.25
 
 require (
 	github.com/Songmu/prompter v0.5.1
@@ -28,7 +26,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/fujiwara/cfn-lookup v1.1.0
 	github.com/fujiwara/ecsta v0.4.5
-	github.com/fujiwara/sloghandler v0.0.3
+	github.com/fujiwara/sloghandler v0.1.0
 	github.com/fujiwara/ssm-lookup v0.1.1
 	github.com/fujiwara/tfstate-lookup v1.8.1
 	github.com/goccy/go-yaml v1.19.0
