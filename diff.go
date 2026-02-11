@@ -381,10 +381,19 @@ func ServiceDefinitionForDiff(sv *Service) *ServiceForDiff {
 			})
 		}
 	}
-	return &ServiceForDiff{
+	sfd := &ServiceForDiff{
 		UpdateServiceInput: svToUpdateServiceInput(sv),
 		Tags:               sv.Tags,
 	}
+	if sv.isCodeDeploy() {
+		// For CodeDeploy Blue/Green deployments, targetGroupArn is managed by
+		// CodeDeploy and swapped between blue/green on each deployment.
+		// Ignore it in diff to avoid false positives.
+		for i := range sfd.LoadBalancers {
+			sfd.LoadBalancers[i].TargetGroupArn = nil
+		}
+	}
+	return sfd
 }
 
 func sortTaskDefinition(td *TaskDefinitionInput) {
