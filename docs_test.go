@@ -176,6 +176,7 @@ func TestParseSectionsSkill(t *testing.T) {
 func TestDocsOptionDefault(t *testing.T) {
 	want := &ecspresso.DocsOption{
 		Article: "readme",
+		List:    false,
 		Index:   false,
 		Search:  "",
 		JSON:    false,
@@ -188,5 +189,19 @@ func TestDocsOptionDefault(t *testing.T) {
 	got := opts.ForSubCommand("docs")
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("DocsOption mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDocsListText(t *testing.T) {
+	err := ecspresso.Docs(ecspresso.DocsOption{List: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDocsListJSON(t *testing.T) {
+	err := ecspresso.Docs(ecspresso.DocsOption{List: true, JSON: true})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

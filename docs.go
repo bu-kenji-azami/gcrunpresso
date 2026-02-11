@@ -11,6 +11,7 @@ import (
 // DocsOption defines CLI options for the docs subcommand.
 type DocsOption struct {
 	Article string `help:"article name to display" default:"readme" enum:"readme,skill"`
+	List    bool   `help:"list available articles" default:"false"`
 	Index   bool   `help:"show table of contents" default:"false"`
 	Search  string `help:"search keyword in documents" default:""`
 	JSON    bool   `help:"output in JSON format" default:"false" name:"json"`
@@ -30,14 +31,28 @@ type docsOutput struct {
 	Sections []docsSection `json:"sections"`
 }
 
+type docsArticle struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+var articles = []docsArticle{
+	{Name: "readme", Description: "ecspresso README"},
+	{Name: "skill", Description: "LLM agent skill reference"},
+}
+
 // Docs shows embedded documentation.
 func Docs(opt DocsOption) error {
+	jsonOutput := opt.JSON || logFormat == logFormatJSON
+
+	if opt.List {
+		return docsList(jsonOutput)
+	}
+
 	content, err := getArticle(opt.Article)
 	if err != nil {
 		return err
 	}
-
-	jsonOutput := opt.JSON || logFormat == logFormatJSON
 
 	switch {
 	case opt.Index:
@@ -58,6 +73,18 @@ func getArticle(name string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown article: %s", name)
 	}
+}
+
+func docsList(jsonOutput bool) error {
+	if !jsonOutput {
+		var buf strings.Builder
+		for _, a := range articles {
+			fmt.Fprintf(&buf, "%s\t%s\n", a.Name, a.Description)
+		}
+		_, err := io.WriteString(os.Stdout, buf.String())
+		return err
+	}
+	return writeJSON(articles)
 }
 
 func docsFull(article, content string, jsonOutput bool) error {
