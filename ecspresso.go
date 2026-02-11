@@ -208,7 +208,7 @@ func New(ctx context.Context, opt *CLIOptions, newAppOptions ...AppOption) (*App
 		fn(&appOpts)
 	}
 
-	LogInfo("ecspresso version: %s", Version)
+	LogInfo("ecspresso version", "version", Version)
 
 	// load config file
 	if appOpts.config == nil {
@@ -303,7 +303,7 @@ func (d *App) DescribeService(ctx context.Context) (*Service, error) {
 	status := aws.ToString(out.Services[0].Status)
 	switch status {
 	case "DRAINING":
-		d.LogWarn("service %s is %s", d.Service, status)
+		d.LogWarn("service status warning", "status", status)
 	case "INACTIVE":
 		return nil, ErrNotFound(fmt.Sprintf("service %s is %s", d.Service, status))
 	default:
@@ -426,7 +426,7 @@ func (d *App) describeAutoScaling(ctx context.Context, s *Service) ([]aasTypes.S
 	if err != nil {
 		var oe *smithy.OperationError
 		if errors.As(err, &oe) {
-			d.LogWarn("failed to describe scalable targets: %s", oe)
+			d.LogWarn("failed to describe scalable targets", "error", oe.Error())
 			return nil, nil, nil
 		}
 		return nil, nil, fmt.Errorf("failed to describe scalable targets: %w", err)
@@ -446,7 +446,7 @@ func (d *App) describeAutoScaling(ctx context.Context, s *Service) ([]aasTypes.S
 	if err != nil {
 		var oe *smithy.OperationError
 		if errors.As(err, &oe) {
-			d.LogWarn("failed to describe scaling policies: %s", oe)
+			d.LogWarn("failed to describe scaling policies", "error", oe.Error())
 			return tout.ScalableTargets, nil, nil
 		}
 		return tout.ScalableTargets, nil, fmt.Errorf("failed to describe scaling policies: %w", err)
@@ -462,7 +462,7 @@ func (d *App) DescribeTaskStatus(ctx context.Context, task *types.Task, watchCon
 	}
 	if len(out.Failures) > 0 {
 		f := out.Failures[0]
-		d.LogInfo("Task ARN: %s", *f.Arn)
+		d.LogInfo("task failure", "task_arn", *f.Arn)
 		return errors.New(*f.Reason)
 	}
 
@@ -573,7 +573,7 @@ func (d *App) RegisterTaskDefinition(ctx context.Context, td *TaskDefinitionInpu
 		return nil, fmt.Errorf("failed to register task definition: %w", err)
 	}
 	otd := TaskDefinition(*out.TaskDefinition)
-	d.LogInfo("Task definition is registered %s", otd.Name())
+	d.LogInfo("task definition registered", "task_definition", otd.Name())
 	return &otd, nil
 }
 
@@ -621,7 +621,7 @@ func unmarshalJSON(src []byte, v any, path string) error {
 		if !strings.Contains(err.Error(), "unknown field") {
 			return err
 		}
-		LogWarn("%s in %s", err, path)
+		LogWarn("unknown field in definition", "error", err.Error(), "path", path)
 		// unknown field -> try lax decoder
 		lax := json.NewDecoder(bytes.NewReader(src))
 		return lax.Decode(&v)
@@ -665,8 +665,7 @@ func (d *App) GetLogInfo(task *types.Task, c *types.ContainerDefinition) (string
 	logStream := strings.Join([]string{logStreamPrefix, *c.Name, taskID}, "/")
 	logGroup := lc.Options["awslogs-group"]
 
-	d.LogInfo("logGroup: %s", logGroup)
-	d.LogInfo("logStream: %s", logStream)
+	d.LogInfo("log configuration", "log_group", logGroup, "log_stream", logStream)
 
 	return logGroup, logStream
 }

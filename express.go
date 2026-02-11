@@ -31,7 +31,7 @@ func (e *ExpressGatewayService) GetTags() []types.Tag {
 
 func (d *App) initExpressGatewayService(ctx context.Context, sv *Service, opt InitOption) (*ExpressGatewayService, *Service, error) {
 	conf := d.config
-	d.LogInfo("Initializing express definition from the service %s...", aws.ToString(sv.ServiceName))
+	d.LogInfo("initializing express definition", "service", aws.ToString(sv.ServiceName))
 
 	ex, err := d.DescribeExpressGatewayService(ctx, sv)
 	if err != nil {
@@ -53,7 +53,7 @@ func (d *App) initExpressGatewayService(ctx context.Context, sv *Service, opt In
 		}
 		b = []byte(out)
 	}
-	d.LogInfo("save the express gateway service %s to %s", aws.ToString(ex.ServiceName), conf.ExpressDefinitionPath)
+	d.LogInfo("saving express gateway service", "service", aws.ToString(ex.ServiceName), "path", conf.ExpressDefinitionPath)
 	if err := d.saveFile(conf.ExpressDefinitionPath, b, CreateFileMode, opt.ForceOverwrite); err != nil {
 		return nil, nil, err
 	}
@@ -104,7 +104,7 @@ func (d *App) createExpressGatewayService(ctx context.Context, opt DeployOption)
 	if err != nil {
 		return err
 	}
-	d.LogInfo("Creating express gateway service %s...%s", aws.ToString(ex.ServiceName), opt.DryRunString())
+	d.LogInfo("creating express gateway service", withDryRun(opt.DryRun, "service", aws.ToString(ex.ServiceName))...)
 	if opt.DryRun {
 		OutputJSONForAPI(os.Stdout, ex)
 		return nil
@@ -228,7 +228,7 @@ func (d *App) DeployExpressGatewayService(ctx context.Context, sv *Service, opt 
 	if err != nil {
 		return err
 	}
-	d.LogInfo("Updating express gateway service %s...%s", aws.ToString(sv.ServiceName), opt.DryRunString())
+	d.LogInfo("updating express gateway service", withDryRun(opt.DryRun, "service", aws.ToString(sv.ServiceName))...)
 
 	in := exToUpdateExpressGatewayServiceInput(ex, sv)
 

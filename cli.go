@@ -25,6 +25,7 @@ type CLIOptions struct {
 	Deploy     *DeployOption     `cmd:"" help:"deploy service"`
 	Deregister *DeregisterOption `cmd:"" help:"deregister task definition"`
 	Diff       *DiffOption       `cmd:"" help:"show diff between task definition, service definition with current running service and task definition"`
+	Docs       *DocsOption       `cmd:"" help:"show documentation for ecspresso"`
 	Exec       *ExecOption       `cmd:"" help:"execute command on task"`
 	Init       *InitOption       `cmd:"" help:"create configuration files from existing ECS service"`
 	Refresh    *RefreshOption    `cmd:"" help:"refresh service. equivalent to deploy --skip-task-definition --force-new-deployment --no-update-service"`
@@ -71,6 +72,8 @@ func (opts *CLIOptions) ForSubCommand(sub string) any {
 		return opts.Deregister
 	case "diff":
 		return opts.Diff
+	case "docs":
+		return opts.Docs
 	case "exec":
 		return opts.Exec
 	case "init":
@@ -107,6 +110,8 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 	case "version", "":
 		_, err := WriteOutput("ecspresso " + Version)
 		return err
+	case "docs":
+		return Docs(*opts.Docs)
 	}
 	var appOpts []AppOption
 	if sub == "init" {

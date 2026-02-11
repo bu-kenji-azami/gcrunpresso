@@ -121,7 +121,7 @@ func (d *App) Wait(ctx context.Context, opt WaitOption) error {
 	defer cancel()
 
 	until := waitUntil(opt.WaitUntil)
-	d.LogInfo("Waiting for the service %s", until)
+	d.LogInfo("waiting for service", "until", string(until))
 
 	sv, err := d.DescribeServiceStatus(ctx, 0)
 	if err != nil {
@@ -134,13 +134,13 @@ func (d *App) Wait(ctx context.Context, opt WaitOption) error {
 	}
 	if err := doWait(ctx, sv); err != nil {
 		if errors.As(err, &errNotFound) && sv.isCodeDeploy() {
-			d.LogInfo("%s", err)
+			d.LogInfo(err.Error())
 			return d.WaitTaskSetStable(ctx, sv)
 		}
 		return err
 	}
 
-	d.LogInfo("Service is %s now. Completed!", until)
+	d.LogInfo("service completed", "status", string(until))
 	return nil
 }
 
@@ -159,7 +159,7 @@ func (d *App) WaitServiceStable(ctx context.Context, sv *Service) error {
 				return
 			case <-tick.C:
 				if err := d.showServiceStatus(waitCtx, st); err != nil {
-					d.LogWarn("%s", err.Error())
+					d.LogWarn(err.Error())
 					continue
 				}
 			}
@@ -177,7 +177,7 @@ func (d *App) WaitServiceStable(ctx context.Context, sv *Service) error {
 	<-time.After(delayForServiceChanged)
 	// show the service status once more (correct all logs)
 	if err := d.showServiceStatus(ctx, st); err != nil {
-		d.LogWarn("%s", err.Error())
+		d.LogWarn(err.Error())
 	}
 	return nil
 }
@@ -231,7 +231,7 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		}
 		return err
 	}
-	d.LogInfo("Waiting for service deployment %s to complete...", arnToName(deploymentArn))
+	d.LogInfo("waiting for service deployment", "deployment", arnToName(deploymentArn))
 
 	tick := time.NewTicker(refreshInterval)
 	defer tick.Stop()
@@ -245,7 +245,7 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		case <-tick.C:
 		}
 		if err := d.showServiceStatus(ctx, st); err != nil {
-			d.LogWarn("%s", err.Error())
+			d.LogWarn(err.Error())
 			continue
 		}
 
@@ -265,7 +265,7 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		revisionSummaryOutput := strings.Join(lines, "\n")
 		if revisionSummaryOutput != prevRevisionSummaryOutput {
 			for _, line := range lines {
-				d.LogInfo("%s", line)
+				d.LogInfo(line)
 			}
 			prevRevisionSummaryOutput = revisionSummaryOutput
 		}
@@ -273,12 +273,12 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 		// check deployment status
 		status := dp.Status
 		if status != prevStatus {
-			d.LogInfo("Service deployment status: %s", status)
+			d.LogInfo("service deployment status", "status", string(status))
 			prevStatus = status
 		}
 		switch status {
 		case types.ServiceDeploymentStatusSuccessful, types.ServiceDeploymentStatusRollbackSuccessful:
-			d.LogInfo("Service deployment completed %s", status)
+			d.LogInfo("service deployment completed", "status", string(status))
 			return nil
 		case types.ServiceDeploymentStatusStopped, types.ServiceDeploymentStatusRollbackFailed, types.ServiceDeploymentStatusStopRequested:
 			return fmt.Errorf("Service deployment failed %s", status)
@@ -322,7 +322,7 @@ func (d *App) WaitForCodeDeploy(ctx context.Context, sv *Service) error {
 	if err != nil {
 		return err
 	}
-	d.LogInfo("Waiting for a deployment successful ID: %s", dpID)
+	d.LogInfo("waiting for deployment success", "deployment_id", dpID)
 	go d.codeDeployProgressBar(ctx, dpID)
 
 	waiter := codedeploy.NewDeploymentSuccessfulWaiter(d.codedeploy, func(o *codedeploy.DeploymentSuccessfulWaiterOptions) {
@@ -342,7 +342,7 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 		if err != nil {
 			return err
 		}
-		d.LogInfo("Waiting for a deployment lifecycle event: %s (ID: %s)", targetLifecycleEvent, dpID)
+		d.LogInfo("waiting for deployment lifecycle event", "event", targetLifecycleEvent, "deployment_id", dpID)
 
 		t := time.NewTicker(refreshInterval)
 		defer t.Stop()
@@ -361,7 +361,7 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 				TargetId:     aws.String(d.Cluster + ":" + d.Service),
 			})
 			if err != nil {
-				d.LogWarn("%s", err.Error())
+				d.LogWarn(err.Error())
 				continue
 			}
 
@@ -373,7 +373,7 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 				lifecycleEvent := *ev.LifecycleEventName
 				if lifecycle2Status[lifecycleEvent] != ev.Status {
 					if ev.Status != cdTypes.LifecycleEventStatusPending {
-						d.LogInfo("%s: %s", lifecycleEvent, ev.Status)
+						d.LogInfo("lifecycle event status", "event", lifecycleEvent, "status", string(ev.Status))
 					}
 					lifecycle2Status[lifecycleEvent] = ev.Status
 				}
@@ -382,12 +382,12 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 					targetEventFound = true
 					switch ev.Status {
 					case cdTypes.LifecycleEventStatusSucceeded:
-						d.LogInfo("Lifecycle event %s completed successfully", targetLifecycleEvent)
+						d.LogInfo("lifecycle event completed", "event", targetLifecycleEvent)
 						return nil
 					case cdTypes.LifecycleEventStatusFailed:
 						return fmt.Errorf("lifecycle event %s failed", targetLifecycleEvent)
 					case cdTypes.LifecycleEventStatusSkipped:
-						d.LogInfo("Lifecycle event %s was skipped", targetLifecycleEvent)
+						d.LogInfo("lifecycle event skipped", "event", targetLifecycleEvent)
 						return nil
 					default:
 						// NOP for "Pending", "InProgress", and "Unknown"
@@ -401,7 +401,7 @@ func (d *App) WaitForCodeDeployLifecycle(targetLifecycleEvent string) waitFunc {
 				if !targetEventFound {
 					return fmt.Errorf("lifecycle event %s not found in deployment", targetLifecycleEvent)
 				}
-				d.LogInfo("Deployment completed but lifecycle event %s did not complete as expected", targetLifecycleEvent)
+				d.LogInfo("deployment completed, lifecycle event incomplete", "event", targetLifecycleEvent)
 				return nil
 			}
 		}
@@ -446,7 +446,7 @@ func (d *App) showServiceStatus(ctx context.Context, st *showState) error {
 	// if the deployments are not changed, do not show the deployments.
 	if !bytes.Equal(st.deploymentsHash, hash) {
 		for _, line := range lines {
-			d.LogInfo("%s", line)
+			d.LogInfo(line)
 		}
 	}
 	st.deploymentsHash = hash
@@ -483,7 +483,7 @@ func (d *App) codeDeployProgressBar(ctx context.Context, dpID string) error {
 			TargetId:     aws.String(d.Cluster + ":" + d.Service),
 		})
 		if err != nil {
-			d.LogWarn("%s", err.Error())
+			d.LogWarn(err.Error())
 			continue
 		}
 		dep := out.DeploymentTarget
@@ -495,7 +495,7 @@ func (d *App) codeDeployProgressBar(ctx context.Context, dpID string) error {
 			name := *ev.LifecycleEventName
 			if lcEvents[name] != ev.Status {
 				if ev.Status != cdTypes.LifecycleEventStatusPending {
-					d.LogInfo("%s: %s", name, ev.Status)
+					d.LogInfo("lifecycle event status", "event", name, "status", string(ev.Status))
 				}
 				lcEvents[name] = ev.Status
 			}
@@ -523,7 +523,7 @@ func (d *App) WaitTaskSetStable(ctx context.Context, sv *Service) error {
 			ts := sv.TaskSets[0]
 			if aws.ToString(ts.Status) == "PRIMARY" {
 				if prev != ts.StabilityStatus {
-					d.LogInfo("Waiting a task set PRIMARY stable: %s", ts.StabilityStatus)
+					d.LogInfo("waiting for PRIMARY task set stable", "stability_status", string(ts.StabilityStatus))
 					if n > 1 {
 						d.LogInfo("Waiting a PRIMARY taskset available only")
 					}

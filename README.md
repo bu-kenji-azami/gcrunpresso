@@ -37,6 +37,8 @@ ecspresso also supports ECS Express mode for simplified deployments and provides
   - [ECS Express mode support](#ecs-express-mode-support)
   - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
   - [Manipulate ECS tasks](#manipulate-ecs-tasks)
+  - [Show documentation](#show-documentation)
+  - [LLM agent integration](#llm-agent-integration)
 - [Plugins](#plugins)
   - [tfstate](#tfstate)
   - [CloudFormation](#cloudformation)
@@ -200,6 +202,7 @@ Flags:
       --timeout=TIMEOUT           timeout. Override in a configuration file ($ECSPRESSO_TIMEOUT).
       --filter-command=STRING     filter command ($ECSPRESSO_FILTER_COMMAND)
       --[no-]color                enable colorized output ($ECSPRESSO_COLOR)
+      --log-format="text"         log format (text, json) ($ECSPRESSO_LOG_FORMAT)
 
 Commands:
   appspec
@@ -217,6 +220,9 @@ Commands:
   diff
     show diff between task definition, service definition with current running
     service and task definition
+
+  docs
+    show documentation for ecspresso
 
   exec
     execute command on task
@@ -265,6 +271,22 @@ Commands:
 
 For more options for sub-commands, See `ecspresso sub-command --help`.
 
+### Log format
+
+`--log-format` option controls the log output format. The default is `text`.
+
+**text** format outputs human-readable logs. Attributes from `slog.With` (e.g. service/cluster) appear before the message, and per-call attributes appear after the message in `[key:value]` format.
+
+```
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] deployment created on CodeDeploy [deployment_id:d-XXXXXXXXX] [url:https://...]
+```
+
+**json** format outputs structured JSON logs suitable for machine parsing. All attributes are output as individual JSON fields.
+
+```json
+{"time":"2024-01-01T00:00:00.000+09:00","level":"INFO","msg":"deployment created on CodeDeploy","cluster":"default","service":"myService","deployment_id":"d-XXXXXXXXX","url":"https://..."}
+```
+
 ## Quick Start
 
 ecspresso allows you to easily manage your existing/running ECS services by code.
@@ -273,9 +295,9 @@ Try `ecspresso init` for your ECS service with option `--region`, `--cluster` an
 
 ```console
 $ ecspresso init --region ap-northeast-1 --cluster default --service myservice --config ecspresso.yml
-2019/10/12 01:31:48 myservice/default save service definition to ecs-service-def.json
-2019/10/12 01:31:48 myservice/default save task definition to ecs-task-def.json
-2019/10/12 01:31:48 myservice/default save config to ecspresso.yml
+2024-01-01T00:00:00.000+09:00 [INFO] [myservice/default] saving service definition [path:ecs-service-def.json]
+2024-01-01T00:00:00.000+09:00 [INFO] [myservice/default] saving task definition [path:ecs-task-def.json]
+2024-01-01T00:00:00.000+09:00 [INFO] [myservice/default] saving config [path:ecspresso.yml]
 ```
 
 Review the generated files: `ecspresso.yml`, `ecs-service-def.json`, and `ecs-task-def.json`.
@@ -378,20 +400,20 @@ ecspresso also adds some template functions via plugins. See the [Plugins](#plug
 
 ```console
 $ ecspresso deploy --config ecspresso.yml
-2017/11/09 23:20:13 myService/default Starting deploy
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] Starting deploy
 Service: myService
 Cluster: default
 TaskDefinition: myService:3
 Deployments:
     PRIMARY myService:3 desired:1 pending:0 running:1
 Events:
-2017/11/09 23:20:13 myService/default Creating a new task definition by myTask.json
-2017/11/09 23:20:13 myService/default Registering a new task definition...
-2017/11/09 23:20:13 myService/default Task definition is registered myService:4
-2017/11/09 23:20:13 myService/default Updating service...
-2017/11/09 23:20:13 myService/default Waiting for service stable...(it will take a few minutes)
-2017/11/09 23:23:23 myService/default  PRIMARY myService:4 desired:1 pending:0 running:1
-2017/11/09 23:23:29 myService/default Service is stable now. Completed!
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] creating a new task definition [path:myTask.json]
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] registering a new task definition
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] task definition is registered [task_definition:myService:4]
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] updating service
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] Waiting for service stable...(it will take a few minutes)
+2024-01-01T00:03:10.000+09:00 [INFO] [myService/default]  PRIMARY myService:4 desired:1 pending:0 running:1
+2024-01-01T00:03:16.000+09:00 [INFO] [myService/default] Service is stable now. Completed!
 ```
 
 `deploy` commands has many options to customize the deployment behavior. See `ecspresso deploy --help` for more details.
@@ -514,19 +536,18 @@ codedeploy:
 
 ```console
 $ ecspresso deploy --config ecspresso.yml --rollback-events DEPLOYMENT_FAILURE
-2019/10/15 22:47:07 myService/default Starting deploy
+2024-01-01T00:00:00.000+09:00 [INFO] [myService/default] Starting deploy
 Service: myService
 Cluster: default
 TaskDefinition: myService:5
 TaskSets:
    PRIMARY myService:5 desired:1 pending:0 running:1
 Events:
-2019/10/15 22:47:08 myService/default Creating a new task definition by ecs-task-def.json
-2019/10/15 22:47:08 myService/default Registering a new task definition...
-2019/10/15 22:47:08 myService/default Task definition is registered myService:6
-2019/10/15 22:47:08 myService/default desired count: 1
-2019/10/15 22:47:09 myService/default Deployment d-XXXXXXXXX is created on CodeDeploy
-2019/10/15 22:47:09 myService/default https://ap-northeast-1.console.aws.amazon.com/codesuite/codedeploy/deployments/d-XXXXXXXXX?region=ap-northeast-1
+2024-01-01T00:00:01.000+09:00 [INFO] [myService/default] creating a new task definition [path:ecs-task-def.json]
+2024-01-01T00:00:01.000+09:00 [INFO] [myService/default] registering a new task definition
+2024-01-01T00:00:01.000+09:00 [INFO] [myService/default] task definition is registered [task_definition:myService:6]
+2024-01-01T00:00:01.000+09:00 [INFO] [myService/default] desired count [count:1]
+2024-01-01T00:00:02.000+09:00 [INFO] [myService/default] deployment created on CodeDeploy [deployment_id:d-XXXXXXXXX] [url:https://ap-northeast-1.console.aws.amazon.com/codesuite/codedeploy/deployments/d-XXXXXXXXX?region=ap-northeast-1]
 ```
 
 CodeDeploy appspec hooks can be defined in a config file. ecspresso automatically creates `Resources` and `version` elements in appspec on deployment:
@@ -1054,7 +1075,7 @@ ecspresso verify tries to assume the task execution role defined in task definit
 
 ```console
 $ ecspresso verify
-2020/12/08 11:43:10 nginx-local/ecspresso-test Starting verify
+2024-01-01T00:00:00.000+09:00 [INFO] [nginx-local/ecspresso-test] Starting verify
   TaskDefinition
     ExecutionRole[arn:aws:iam::123456789012:role/ecsTaskRole]
     --> [OK]
@@ -1071,7 +1092,7 @@ $ ecspresso verify
   --> [OK]
   Cluster
   --> [OK]
-2020/12/08 11:43:14 nginx-local/ecspresso-test Verify OK!
+2024-01-01T00:00:04.000+09:00 [INFO] [nginx-local/ecspresso-test] Verify OK!
 ```
 
 ### Manipulate ECS tasks
@@ -1148,6 +1169,72 @@ The `-L` option is a short expression for `local-port:host:port`. For example, `
 ```
 $ ecspresso exec --port-forward -L 8080:example.com:80
 ```
+
+### Show documentation
+
+The `docs` command shows the embedded documentation (this README) directly from the ecspresso binary. This command does not require AWS credentials or a configuration file.
+
+```
+Flags:
+      --article="readme"          article name to display
+      --list                      list available articles
+      --index                     show table of contents
+      --search=""                 search keyword in documents
+      --json                      output in JSON format
+```
+
+Show the full README:
+
+```console
+$ ecspresso docs
+```
+
+Show the table of contents with section headings and line numbers:
+
+```console
+$ ecspresso docs --index
+```
+
+Search for sections containing a keyword (case-insensitive):
+
+```console
+$ ecspresso docs --search "fargate"
+```
+
+Output in JSON format (useful for LLM agents and other tools):
+
+```console
+$ ecspresso docs --search "deploy" --json
+```
+
+The JSON output contains structured sections with `level`, `title`, `content`, and `line` fields, making it easy for automated tools and LLM agents to consume ecspresso documentation programmatically.
+
+List available articles:
+
+```console
+$ ecspresso docs --list
+readme	ecspresso README
+skill	LLM agent skill reference
+```
+
+Show the LLM agent skill guide:
+
+```console
+$ ecspresso docs --article skill
+```
+
+### LLM agent integration
+
+ecspresso provides a skill guide for LLM agents (such as Claude Code, ChatGPT, etc.) to use ecspresso effectively. The skill guide covers common workflows, command usage patterns, and best practices including the recommendation to use Jsonnet over JSON/YAML for definition files.
+
+The skill guide is embedded in the binary and can be accessed via `ecspresso docs --article skill`. No separate file installation is needed.
+
+To integrate ecspresso with an LLM agent:
+
+1. Add a line to the agent's instructions (e.g., CLAUDE.md): `Run ecspresso docs --article skill to learn how to use ecspresso.`
+2. The agent can then use `ecspresso docs --search "<keyword>" --json` to look up specific topics at runtime.
+
+This combination allows an LLM agent to deploy, manage, and troubleshoot ECS services through ecspresso with minimal human guidance.
 
 ## Plugins
 

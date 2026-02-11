@@ -89,11 +89,11 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	defer cancel()
 
 	var sv *Service
-	d.LogInfo("Starting deploy %s", opt.DryRunString())
+	d.LogInfo("Starting deploy", withDryRun(opt.DryRun)...)
 	sv, err := d.DescribeServiceStatus(ctx, 0)
 	if err != nil {
 		if errors.As(err, &errNotFound) {
-			d.LogInfo("Service %s not found. Creating a new service %s", d.Service, opt.DryRunString())
+			d.LogInfo("service not found, creating a new service", withDryRun(opt.DryRun)...)
 			if d.config.isExpressMode() {
 				return d.createExpressGatewayService(ctx, opt)
 			} else {
@@ -150,7 +150,7 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 		count = calcDesiredCount(sv, opt)
 	}
 	if count != nil {
-		d.LogInfo("desired count: %d", *count)
+		d.LogInfo("desired count", "desired_count", *count)
 	} else {
 		d.LogInfo("desired count: unchanged")
 	}
@@ -176,14 +176,14 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 
 	if err := doWait(ctx, sv); err != nil {
 		if errors.As(err, &errNotFound) {
-			d.LogInfo("%s", err)
+			d.LogInfo(err.Error())
 			// no need to wait
 			return nil
 		}
 		return err
 	}
 
-	d.LogInfo("Service is %s now. Completed!", opt.WaitUntil)
+	d.LogInfo("service completed", "status", opt.WaitUntil)
 	return nil
 }
 
@@ -199,7 +199,7 @@ func (d *App) UpdateServiceTasks(ctx context.Context, taskDefinitionArn string, 
 	if opt.ForceNewDeployment {
 		msg = msg + " with force new deployment"
 	}
-	d.LogInfo("%s...", msg)
+	d.LogInfo(msg)
 	d.LogJSON(in)
 
 	_, err := d.ecs.UpdateService(ctx, in)
@@ -275,7 +275,7 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 		in.CapacityProviderStrategy = nil
 	} else {
 		if dc := sv.DeploymentConfiguration; dc != nil {
-			d.LogInfo("deployment by ECS %s strategy", dc.Strategy)
+			d.LogInfo("deployment by ECS strategy", "strategy", string(dc.Strategy))
 		} else {
 			d.LogInfo("deployment by ECS rolling update")
 		}
@@ -286,7 +286,7 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 	in.Cluster = aws.String(d.Cluster)
 
 	if opt.DryRun {
-		d.LogInfo("update service input: %s", MustMarshalJSONStringForAPI(in))
+		d.LogInfo("update service input", "input", MustMarshalJSONStringForAPI(in))
 		return nil
 	}
 	d.LogInfo("Updating service attributes...")
@@ -302,7 +302,7 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 
 func (d *App) DeployByCodeDeploy(ctx context.Context, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error {
 	if count != nil {
-		d.LogInfo("updating desired count to %d", *count)
+		d.LogInfo("updating desired count", "desired_count", *count)
 	}
 	_, err := d.ecs.UpdateService(
 		ctx,
@@ -496,12 +496,11 @@ func (d *App) createDeployment(ctx context.Context, sv *Service, taskDefinitionA
 		id,
 		d.config.Region,
 	)
-	d.LogInfo("Deployment %s is created on CodeDeploy:", id)
-	d.LogInfo("%s", u)
+	d.LogInfo("deployment created on CodeDeploy", "deployment_id", id, "url", u)
 
 	if isatty.IsTerminal(os.Stdout.Fd()) {
 		if err := exec.Command("open", u).Start(); err != nil {
-			d.LogInfo("Couldn't open URL %s", u)
+			d.LogInfo("couldn't open URL", "url", u)
 		}
 	}
 	return nil
@@ -543,11 +542,11 @@ func (d *App) UpdateServiceTags(ctx context.Context, sv *Service, added, updated
 
 	if len(tags) > 0 {
 		for _, t := range tags {
-			d.LogInfo("updating service tags: %s=%s %s", aws.ToString(t.Key), aws.ToString(t.Value), opt.DryRunString())
+			d.LogInfo("updating service tag", withDryRun(opt.DryRun, "tag_key", aws.ToString(t.Key), "tag_value", aws.ToString(t.Value))...)
 		}
 	}
 	if len(untagKeys) > 0 {
-		d.LogInfo("deleting service tags: %v %s", untagKeys, opt.DryRunString())
+		d.LogInfo("deleting service tags", withDryRun(opt.DryRun, "tag_keys", strings.Join(untagKeys, ","))...)
 	}
 	if opt.DryRun {
 		return nil
