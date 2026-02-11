@@ -90,6 +90,7 @@ go test -race ./...
       t.Errorf("mismatch (-want +got):\n%s", diff)
   }
   ```
+- Use `t.Context()` instead of `context.Background()` in tests
 
 ## Documentation
 

@@ -1,7 +1,6 @@
 package external_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestExternalPlugin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	config := external.Config{
 		Name:    "test",
 		Command: []string{"jq", "-n"},
@@ -47,7 +46,7 @@ func TestExternalPlugin(t *testing.T) {
 }
 
 func TestExternalPluginTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	config := external.Config{
 		Name:    "test",
 		Command: []string{"sh", "-c", "sleep 2; echo 123"},
@@ -65,7 +64,7 @@ func TestExternalPluginTimeout(t *testing.T) {
 }
 
 func TestExternalPluginString(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	config := external.Config{
 		Name:    "echo",
 		Command: []string{"echo", "-n"},

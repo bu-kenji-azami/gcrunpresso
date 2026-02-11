@@ -2,7 +2,6 @@ package ecspresso_test
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 
@@ -232,7 +231,7 @@ var testServiceDefinitionHasDesiredCount = &ecspresso.Service{
 }
 
 func TestDiffServices(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)
@@ -372,7 +371,7 @@ func TestDiffServices(t *testing.T) {
 }
 
 func TestDiffServicesCodeDeployTargetGroupArn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)
@@ -461,7 +460,7 @@ func TestDiffServicesCodeDeployTargetGroupArn(t *testing.T) {
 }
 
 func TestDiffJsonnet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true, Jsonnet: true}
 	opt.SetWriter(b)
@@ -523,7 +522,7 @@ func TestDiffJsonnet(t *testing.T) {
 }
 
 func TestDiffTaskDefs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)
