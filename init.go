@@ -46,7 +46,7 @@ func (opt *InitOption) NewConfig(ctx context.Context, configFilePath string) (*C
 	return conf, nil
 }
 
-var (
+const (
 	jsonnetExt = ".jsonnet"
 	jsonExt    = ".json"
 	ymlExt     = ".yml"
