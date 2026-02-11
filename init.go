@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/goccy/go-yaml"
-	"github.com/google/go-jsonnet/formatter"
 )
 
 var CreateFileMode = os.FileMode(0644)
@@ -159,7 +158,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 			if err != nil {
 				return fmt.Errorf("unable to marshal config to JSON: %w", err)
 			}
-			out, err := formatter.Format(configFilePath, string(b), formatter.DefaultOptions())
+			out, err := toJsonnetString(string(b), configFilePath)
 			if err != nil {
 				return fmt.Errorf("unable to format config as Jsonnet: %w", err)
 			}
@@ -203,7 +202,7 @@ func (d *App) initServiceDefinition(ctx context.Context, sv *Service, opt InitOp
 		return nil, "", fmt.Errorf("unable to marshal service definition to JSON: %w", err)
 	} else {
 		if opt.Jsonnet {
-			out, err := formatter.Format(conf.ServiceDefinitionPath, string(b), formatter.DefaultOptions())
+			out, err := toJsonnetString(string(b), conf.ServiceDefinitionPath)
 			if err != nil {
 				return nil, "", fmt.Errorf("unable to format service definition as Jsonnet: %w", err)
 			}
@@ -232,7 +231,7 @@ func (d *App) initTaskDefinition(ctx context.Context, opt InitOption, tdArn stri
 		return nil, fmt.Errorf("unable to marshal task definition to JSON: %w", err)
 	} else {
 		if opt.Jsonnet {
-			out, err := formatter.Format(conf.TaskDefinitionPath, string(b), formatter.DefaultOptions())
+			out, err := toJsonnetString(string(b), conf.TaskDefinitionPath)
 			if err != nil {
 				return nil, fmt.Errorf("unable to format task definition as Jsonnet: %w", err)
 			}

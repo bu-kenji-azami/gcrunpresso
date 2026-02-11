@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/google/go-jsonnet/formatter"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
@@ -47,7 +46,7 @@ func (d *App) initExpressGatewayService(ctx context.Context, sv *Service, opt In
 		return nil, nil, fmt.Errorf("unable to marshal express gateway service to JSON: %w", err)
 	}
 	if opt.Jsonnet {
-		out, err := formatter.Format(conf.ExpressDefinitionPath, string(b), formatter.DefaultOptions())
+		out, err := toJsonnetString(string(b), conf.ExpressDefinitionPath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to format express gateway service as Jsonnet: %w", err)
 		}

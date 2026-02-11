@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/fatih/color"
+	"github.com/google/go-jsonnet/formatter"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
@@ -27,6 +28,7 @@ import (
 
 type DiffOption struct {
 	Unified  bool   `help:"unified diff format" default:"true" negatable:""`
+	Jsonnet  bool   `help:"render as jsonnet format" default:"false"`
 	External string `help:"external command to format diff" env:"ECSPRESSO_DIFF_COMMAND"`
 
 	w io.Writer `kong:"-"`
@@ -156,6 +158,14 @@ func diffServices(ctx context.Context, local, remote *Service, localPath string,
 
 	remoteSv := toDiffString(remoteSvBytes)
 	newSv := toDiffString(newSvBytes)
+	if opt.Jsonnet {
+		if remoteSv, err = toJsonnetString(remoteSv, remoteArn); err != nil {
+			return false, fmt.Errorf("failed to format remote service definition as jsonnet: %w", err)
+		}
+		if newSv, err = toJsonnetString(newSv, localPath); err != nil {
+			return false, fmt.Errorf("failed to format local service definition as jsonnet: %w", err)
+		}
+	}
 	if remoteSv == newSv {
 		return false, nil
 	}
@@ -191,6 +201,14 @@ func diffTaskDefs(ctx context.Context, local, remote *TaskDefinitionInput, local
 
 	remoteTd := toDiffString(remoteTdBytes)
 	newTd := toDiffString(newTdBytes)
+	if opt.Jsonnet {
+		if remoteTd, err = toJsonnetString(remoteTd, remoteArn); err != nil {
+			return false, fmt.Errorf("failed to format remote task definition as jsonnet: %w", err)
+		}
+		if newTd, err = toJsonnetString(newTd, localPath); err != nil {
+			return false, fmt.Errorf("failed to format local task definition as jsonnet: %w", err)
+		}
+	}
 	if remoteTd == newTd {
 		return false, nil
 	}
@@ -487,4 +505,11 @@ func toDiffString(b []byte) string {
 		return ""
 	}
 	return string(b)
+}
+
+func toJsonnetString(jsonStr, filename string) (string, error) {
+	if jsonStr == "" {
+		return "", nil
+	}
+	return formatter.Format(filename, jsonStr, formatter.DefaultOptions())
 }
