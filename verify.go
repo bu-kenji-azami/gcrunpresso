@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -169,10 +170,10 @@ func (d *App) newAssumedVerifier(ctx context.Context, cfg aws.Config, executionR
 		RoleSessionName: aws.String("ecspresso-verifier"),
 	})
 	if err != nil {
-		d.LogInfo("failed to assume role to taskExecutionRole. Continue to verify with current session. %s", err.Error())
+		d.LogInfo("failed to assume role to taskExecutionRole, continuing with current session", "error", err.Error())
 		return newVerifier(&cfg, &cfg, opt), nil
 	}
-	d.LogInfo("success to assume role: %s", aws.ToString(executionRole))
+	d.LogInfo("assumed role successfully", "role", aws.ToString(executionRole))
 	ec := aws.Config{}
 	ec.Region = d.config.Region
 	ec.Credentials = credentials.NewStaticCredentialsProvider(
@@ -427,7 +428,7 @@ func (d *App) verifyServiceDefinition(ctx context.Context) error {
 		_, err := vs.VerifyResource(ctx, name, func(context.Context) error {
 			if ebs := vc.ManagedEBSVolume; ebs != nil {
 				if len(ebs.TagSpecifications) > 1 {
-					d.LogWarn("%s has more than one tag specifications. Only the first tag specification is used.", name)
+					d.LogWarn("more than one tag specification, using first only", "resource", name)
 				}
 				roleArn := aws.ToString(ebs.RoleArn)
 				if _, err := vs.VerifyResource(ctx, fmt.Sprintf("RoleArn[%s]", roleArn), func(ctx context.Context) error {
@@ -974,10 +975,10 @@ func (d *App) verifyLogConfiguration(ctx context.Context, c *types.ContainerDefi
 			} else if d.verifier.IsAssumed() {
 				return fmt.Errorf("failed to create log group %s: %w", group, err)
 			} else {
-				d.LogWarn("failed to create log group %s: %s", group, err)
+				d.LogWarn("failed to create log group", "log_group", group, "error", err.Error())
 			}
 		} else {
-			d.LogInfo("created log group %s", group)
+			d.LogInfo("created log group", "log_group", group)
 		}
 	}
 
@@ -1042,11 +1043,35 @@ func (d *App) verifyRole(ctx context.Context, roleArn, principalService string) 
 		return fmt.Errorf("failed to parse IAM policy document: %w", err)
 	}
 	for _, st := range doc.Statement {
-		if st.Principal.Service == principalService && st.Action == "sts:AssumeRole" {
+		if st.Principal.Service.contains(principalService) && st.Action.contains("sts:AssumeRole") {
 			return nil
 		}
 	}
 	return fmt.Errorf("role %s has not a valid policy document", roleName)
+}
+
+// stringOrSlice is a type that can unmarshal from either a string or an array of strings.
+// IAM policy documents allow both formats for fields like Principal.Service and Action.
+type stringOrSlice []string
+
+func (s *stringOrSlice) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*s = []string{str}
+		return nil
+	}
+	// Try to unmarshal as an array of strings
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	*s = arr
+	return nil
+}
+
+func (s stringOrSlice) contains(v string) bool {
+	return slices.Contains(s, v)
 }
 
 type iamPolicyDocument struct {
@@ -1054,9 +1079,9 @@ type iamPolicyDocument struct {
 	Statement []struct {
 		Effect    string `json:"Effect"`
 		Principal struct {
-			Service string `json:"Service"`
+			Service stringOrSlice `json:"Service"`
 		} `json:"Principal"`
-		Action string `json:"Action"`
+		Action stringOrSlice `json:"Action"`
 	} `json:"Statement"`
 }
 

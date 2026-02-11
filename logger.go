@@ -51,14 +51,12 @@ func LogDebug(f string, v ...any) {
 	commonLogger.Debug(msg)
 }
 
-func LogInfo(f string, v ...any) {
-	msg := fmt.Sprintf(f, v...)
-	commonLogger.Info(msg)
+func LogInfo(msg string, args ...any) {
+	commonLogger.Info(msg, args...)
 }
 
-func LogWarn(f string, v ...any) {
-	msg := fmt.Sprintf(f, v...)
-	commonLogger.Warn(msg)
+func LogWarn(msg string, args ...any) {
+	commonLogger.Warn(msg, args...)
 }
 
 func LogError(f string, v ...any) {
@@ -71,19 +69,26 @@ func (d *App) LogDebug(f string, v ...any) {
 	d.logger.Debug(msg)
 }
 
-func (d *App) LogInfo(f string, v ...any) {
-	msg := fmt.Sprintf(f, v...)
-	d.logger.Info(msg)
+func (d *App) LogInfo(msg string, args ...any) {
+	d.logger.Info(msg, args...)
 }
 
-func (d *App) LogWarn(f string, v ...any) {
-	msg := fmt.Sprintf(f, v...)
-	d.logger.Warn(msg)
+func (d *App) LogWarn(msg string, args ...any) {
+	d.logger.Warn(msg, args...)
 }
 
 func (d *App) LogError(f string, v ...any) {
 	msg := fmt.Sprintf(f, v...)
 	d.logger.Error(msg)
+}
+
+// withDryRun appends "dry_run":true to args only when dryRun is true.
+// Usage: d.LogInfo("msg", withDryRun(opt.DryRun, "key", val)...)
+func withDryRun(dryRun bool, args ...any) []any {
+	if dryRun {
+		return append(args, "dry_run", true)
+	}
+	return args
 }
 
 func (d *App) LogJSON(v any) {

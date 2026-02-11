@@ -775,6 +775,36 @@ var cliTests = []struct {
 		},
 	},
 	{
+		args:      []string{"docs"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "readme"},
+	},
+	{
+		args:      []string{"docs", "--index"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "readme", Index: true},
+	},
+	{
+		args:      []string{"docs", "--search", "fargate"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "readme", Search: "fargate"},
+	},
+	{
+		args:      []string{"docs", "--json"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "readme", JSON: true},
+	},
+	{
+		args:      []string{"docs", "--index", "--json"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "readme", Index: true, JSON: true},
+	},
+	{
+		args:      []string{"docs", "--article", "skill"},
+		sub:       "docs",
+		subOption: &ecspresso.DocsOption{Article: "skill"},
+	},
+	{
 		args: []string{"diff"},
 		sub:  "diff",
 		subOption: &ecspresso.DiffOption{

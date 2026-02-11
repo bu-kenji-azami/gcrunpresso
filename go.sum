@@ -175,8 +175,8 @@ github.com/fujiwara/cfn-lookup v1.1.0 h1:wNjMituD/n8XAhBw+L3uqtDCnWr1nrAI7T/YATM
 github.com/fujiwara/cfn-lookup v1.1.0/go.mod h1:yQiC+G7sSTRTic6E8RKv1G36tp+y2Q/9BT6QMQT4yyw=
 github.com/fujiwara/ecsta v0.7.4 h1:zgAdyAN/PJLKrLqafWLCQjnKqfvC5Isu+GUSBb5rC1Q=
 github.com/fujiwara/ecsta v0.7.4/go.mod h1:9yn1HRHZJhmmCAWuc2oIIgYxeRej070tzO2/qiR9amg=
-github.com/fujiwara/sloghandler v0.0.5 h1:YoWsgm9SrZfUsv5mu0vve7LNZ+6hJ5ZbGlI7rzZPKVA=
-github.com/fujiwara/sloghandler v0.0.5/go.mod h1:hX1CZHkFAiSXOaDhL3qSCcr1p1pL/gYPERs8+5E5nYc=
+github.com/fujiwara/sloghandler v0.1.0 h1:4uxE5z01fKv/qzUoIyYk/2H1D4xEb/wi2K/Wks9z5Tg=
+github.com/fujiwara/sloghandler v0.1.0/go.mod h1:9wl7zZ1fO53Gl83/M8KFYW+5iACiwXAltOL5REOUd24=
 github.com/fujiwara/ssm-lookup v0.1.1 h1:Cwx7Y6A0HbIKyAzS60DYcf/TZ5KZHY/vTlCtUoythfQ=
 github.com/fujiwara/ssm-lookup v0.1.1/go.mod h1:ssVwS1FrHAKouOMEmYC6j07XRKqBGdABRmv6gBKewVg=
 github.com/fujiwara/tfstate-lookup v1.8.1 h1:lCWRvhfmm+9PbgS9AhDRi9qQOTFXTIws+W+TC1DY77s=

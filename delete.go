@@ -25,7 +25,7 @@ func (d *App) Delete(ctx context.Context, opt DeleteOption) error {
 	ctx, cancel := d.Start(ctx)
 	defer cancel()
 
-	d.LogInfo("Deleting service %s", opt.DryRunString())
+	d.LogInfo("Deleting service", withDryRun(opt.DryRun)...)
 	sv, err := d.DescribeServiceStatus(ctx, 3)
 	if err != nil {
 		return err

@@ -33,7 +33,7 @@ func (opt DeregisterOption) DryRunString() string {
 func (d *App) Deregister(ctx context.Context, opt DeregisterOption) error {
 	ctx, cancel := d.Start(ctx)
 	defer cancel()
-	d.LogInfo("Starting deregister task definition %s", opt.DryRunString())
+	d.LogInfo("Starting deregister task definition", withDryRun(opt.DryRun)...)
 
 	inUse, err := d.inUseRevisions(ctx)
 	if err != nil {
@@ -79,7 +79,7 @@ func (d *App) deregiserRevision(ctx context.Context, opt DeregisterOption, inUse
 	}
 
 	if opt.DryRun {
-		d.LogInfo("task definition %s will be deregistered", name)
+		d.LogInfo("task definition will be deregistered", "task_definition", name)
 		d.LogInfo("DRY RUN OK")
 		return nil
 	}
@@ -89,21 +89,21 @@ func (d *App) deregiserRevision(ctx context.Context, opt DeregisterOption, inUse
 		return fmt.Errorf("confirmation failed")
 	}
 
-	d.LogInfo("Deregistering %s", name)
+	d.LogInfo("deregistering", "task_definition", name)
 	if _, err := d.ecs.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
 		TaskDefinition: aws.String(name),
 	}); err != nil {
 		return fmt.Errorf("failed to deregister task definition: %w", err)
 	}
-	d.LogInfo("%s was deregistered successfully", name)
+	d.LogInfo("task definition deregistered", "task_definition", name)
 	if opt.Delete {
-		d.LogInfo("Deleting %s", name)
+		d.LogInfo("deleting task definition", "task_definition", name)
 		if _, err := d.ecs.DeleteTaskDefinitions(ctx, &ecs.DeleteTaskDefinitionsInput{
 			TaskDefinitions: []string{name},
 		}); err != nil {
 			return fmt.Errorf("failed to delete task definition: %w", err)
 		}
-		d.LogInfo("%s was deleted successfully", name)
+		d.LogInfo("task definition deleted", "task_definition", name)
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (d *App) deregisterKeeps(ctx context.Context, opt DeregisterOption, inUse m
 				continue
 			}
 			if s := inUse[name]; s != "" {
-				d.LogInfo("%s is in use by %s. skip", name, s)
+				d.LogInfo("task definition in use, skipping", "task_definition", name, "used_by", s)
 			} else {
 				d.LogDebug("%s is marked to deregister", name)
 				names = append(names, name)
@@ -149,7 +149,7 @@ func (d *App) deregisterKeeps(ctx context.Context, opt DeregisterOption, inUse m
 	}
 	for i, name := range names {
 		if i < idx {
-			d.LogInfo("%s will be deregistered", name)
+			d.LogInfo("task definition will be deregistered", "task_definition", name)
 			deregs = append(deregs, name)
 		}
 	}
@@ -165,26 +165,26 @@ func (d *App) deregisterKeeps(ctx context.Context, opt DeregisterOption, inUse m
 		return fmt.Errorf("confirmation failed")
 	}
 	for _, name := range deregs {
-		d.LogInfo("Deregistring %s", name)
+		d.LogInfo("deregistering", "task_definition", name)
 		if _, err := d.ecs.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
 			TaskDefinition: aws.String(name),
 		}); err != nil {
 			return fmt.Errorf("failed to deregister task definition: %w", err)
 		}
-		d.LogInfo("%s was deregistered successfully", name)
+		d.LogInfo("task definition deregistered", "task_definition", name)
 		sleepContext(ctx, time.Second)
 		deregistered++
 	}
-	d.LogInfo("%d task definitions were deregistered", deregistered)
+	d.LogInfo("task definitions deregistered", "count", deregistered)
 	if opt.Delete {
 		for _, names := range lo.Chunk(deregs, 10) { // 10 is max batch size
-			d.LogInfo("Deleting task definitions %s", strings.Join(names, ","))
+			d.LogInfo("deleting task definitions", "task_definitions", strings.Join(names, ","))
 			if _, err := d.ecs.DeleteTaskDefinitions(ctx, &ecs.DeleteTaskDefinitionsInput{
 				TaskDefinitions: names,
 			}); err != nil {
 				return fmt.Errorf("failed to delete task definition: %w", err)
 			}
-			d.LogInfo("%d task definitions were deleted successfully", len(names))
+			d.LogInfo("task definitions deleted", "count", len(names))
 		}
 	}
 	return nil

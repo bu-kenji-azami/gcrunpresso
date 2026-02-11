@@ -501,3 +501,90 @@ func TestWrapPermissionError(t *testing.T) {
 		})
 	}
 }
+
+func TestParseIAMPolicyDocument(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		containsService string
+		containsAction  string
+		wantErr         bool
+	}{
+		{
+			name: "string format for Service and Action",
+			input: `{
+				"Version": "2012-10-17",
+				"Statement": [{
+					"Effect": "Allow",
+					"Principal": {"Service": "ecs-tasks.amazonaws.com"},
+					"Action": "sts:AssumeRole"
+				}]
+			}`,
+			containsService: "ecs-tasks.amazonaws.com",
+			containsAction:  "sts:AssumeRole",
+			wantErr:         false,
+		},
+		{
+			name: "array format for Service and Action",
+			input: `{
+				"Version": "2012-10-17",
+				"Statement": [{
+					"Effect": "Allow",
+					"Principal": {"Service": ["ecs-tasks.amazonaws.com"]},
+					"Action": ["sts:AssumeRole"]
+				}]
+			}`,
+			containsService: "ecs-tasks.amazonaws.com",
+			containsAction:  "sts:AssumeRole",
+			wantErr:         false,
+		},
+		{
+			name: "array format with multiple services",
+			input: `{
+				"Version": "2012-10-17",
+				"Statement": [{
+					"Effect": "Allow",
+					"Principal": {"Service": ["ecs-tasks.amazonaws.com", "ec2.amazonaws.com"]},
+					"Action": ["sts:AssumeRole", "sts:TagSession"]
+				}]
+			}`,
+			containsService: "ecs-tasks.amazonaws.com",
+			containsAction:  "sts:AssumeRole",
+			wantErr:         false,
+		},
+		{
+			name:            "URL encoded input",
+			input:           `%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Service%22%3A%22ecs-tasks.amazonaws.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRole%22%7D%5D%7D`,
+			containsService: "ecs-tasks.amazonaws.com",
+			containsAction:  "sts:AssumeRole",
+			wantErr:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := ecspresso.ParseIAMPolicyDocument(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseIAMPolicyDocument() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if len(doc.Statement) == 0 {
+				t.Error("ParseIAMPolicyDocument() returned empty statement")
+				return
+			}
+
+			stmt := doc.Statement[0]
+
+			if !ecspresso.StringOrSlice(stmt.Principal.Service).Contains(tt.containsService) {
+				t.Errorf("ParseIAMPolicyDocument() Service does not contain %q, got %v", tt.containsService, stmt.Principal.Service)
+			}
+			if !ecspresso.StringOrSlice(stmt.Action).Contains(tt.containsAction) {
+				t.Errorf("ParseIAMPolicyDocument() Action does not contain %q, got %v", tt.containsAction, stmt.Action)
+			}
+		})
+	}
+}
