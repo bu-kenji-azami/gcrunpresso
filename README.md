@@ -37,6 +37,8 @@ ecspresso also supports ECS Express mode for simplified deployments and provides
   - [ECS Express mode support](#ecs-express-mode-support)
   - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
   - [Manipulate ECS tasks](#manipulate-ecs-tasks)
+  - [Show documentation](#show-documentation)
+  - [LLM agent integration](#llm-agent-integration)
 - [Plugins](#plugins)
   - [tfstate](#tfstate)
   - [CloudFormation](#cloudformation)
@@ -218,6 +220,9 @@ Commands:
   diff
     show diff between task definition, service definition with current running
     service and task definition
+
+  docs
+    show documentation for ecspresso
 
   exec
     execute command on task
@@ -1164,6 +1169,65 @@ The `-L` option is a short expression for `local-port:host:port`. For example, `
 ```
 $ ecspresso exec --port-forward -L 8080:example.com:80
 ```
+
+### Show documentation
+
+The `docs` command shows the embedded documentation (this README) directly from the ecspresso binary. This command does not require AWS credentials or a configuration file.
+
+```
+Flags:
+      --article="readme"          article name to display
+      --index                     show table of contents
+      --search=""                 search keyword in documents
+      --json                      output in JSON format
+```
+
+Show the full README:
+
+```console
+$ ecspresso docs
+```
+
+Show the table of contents with section headings and line numbers:
+
+```console
+$ ecspresso docs --index
+```
+
+Search for sections containing a keyword (case-insensitive):
+
+```console
+$ ecspresso docs --search "fargate"
+```
+
+Output in JSON format (useful for LLM agents and other tools):
+
+```console
+$ ecspresso docs --search "deploy" --json
+```
+
+The JSON output contains structured sections with `level`, `title`, `content`, and `line` fields, making it easy for automated tools and LLM agents to consume ecspresso documentation programmatically.
+
+Available articles: `readme` (default), `skill`.
+
+Show the LLM agent skill guide:
+
+```console
+$ ecspresso docs --article skill
+```
+
+### LLM agent integration
+
+ecspresso provides a skill guide for LLM agents (such as Claude Code, ChatGPT, etc.) to use ecspresso effectively. The skill guide covers common workflows, command usage patterns, and best practices including the recommendation to use Jsonnet over JSON/YAML for definition files.
+
+The skill guide is embedded in the binary and can be accessed via `ecspresso docs --article skill`. No separate file installation is needed.
+
+To integrate ecspresso with an LLM agent:
+
+1. Add a line to the agent's instructions (e.g., CLAUDE.md): `Run ecspresso docs --article skill to learn how to use ecspresso.`
+2. The agent can then use `ecspresso docs --search "<keyword>" --json` to look up specific topics at runtime.
+
+This combination allows an LLM agent to deploy, manage, and troubleshoot ECS services through ecspresso with minimal human guidance.
 
 ## Plugins
 
