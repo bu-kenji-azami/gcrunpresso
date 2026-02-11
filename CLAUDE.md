@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ecspresso is a deployment tool for Amazon ECS written in Go. It manages ECS services through configuration files (YAML, JSON, or Jsonnet) that define task definitions and service definitions.
 
+## Git Workflow
+
+- Default branch: `v2`
+- Do not commit directly to `v2`. Always create a feature branch first.
+
 ## Build Commands
 
 ```bash

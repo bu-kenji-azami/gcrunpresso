@@ -328,16 +328,6 @@ func (d *App) waitForCodeDeployRollback(ctx context.Context, id string) error {
 
 func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Duration) (string, error) {
 	d.LogDebug("finding active ECS service deployment...")
-	sv, err := d.DescribeService(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to describe service: %w", err)
-	}
-	if dpArn := sv.CurrentServiceDeployment; dpArn != nil {
-		d.LogDebug("current service deployment found: %s", aws.ToString(dpArn))
-		return aws.ToString(dpArn), nil
-	}
-	d.LogDebug("no current service deployment, searching active deployments...")
-
 	tm := time.NewTimer(timeout)
 	defer tm.Stop()
 	activeDeployments := make([]types.ServiceDeploymentBrief, 0)
@@ -347,7 +337,6 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 			Service: &d.Service,
 			Status: []types.ServiceDeploymentStatus{
 				types.ServiceDeploymentStatusInProgress,
-				types.ServiceDeploymentStatusPending,
 			},
 		})
 		if err != nil {
@@ -355,7 +344,11 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 		}
 		d.LogDebug("found %d active service deployments", len(resp.ServiceDeployments))
 		for _, sd := range resp.ServiceDeployments {
-			d.LogDebug(" service deployment: %s created at %s", aws.ToString(sd.ServiceDeploymentArn), sd.CreatedAt)
+			d.LogInfo("service deployment found",
+				"arn", arnToName(aws.ToString(sd.ServiceDeploymentArn)),
+				"created_at", sd.CreatedAt,
+				"status", sd.Status,
+			)
 		}
 		// found active deployments started after the application started
 		activeDeployments = append(activeDeployments,
@@ -373,19 +366,20 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 		case <-tm.C: // Timeout reached
 			return "", ErrNotFound("no active service deployments found")
 		default:
-			d.LogDebug("no active service deployments found, retrying...")
+			d.LogInfo("no active service deployments found, waiting...")
 			sleepContext(ctx, delayForServiceChanged)
 		}
-	}
-
-	for _, sd := range activeDeployments {
-		d.LogDebug(" active service deployment: %s created at %s", aws.ToString(sd.ServiceDeploymentArn), sd.CreatedAt)
 	}
 
 	// Find the most recent active deployment
 	deployment := lo.MaxBy(activeDeployments, func(item types.ServiceDeploymentBrief, max types.ServiceDeploymentBrief) bool {
 		return item.CreatedAt.After(*max.CreatedAt)
 	})
+	d.LogInfo("wait deployment",
+		"arn", arnToName(aws.ToString(deployment.ServiceDeploymentArn)),
+		"created_at", deployment.CreatedAt,
+		"status", deployment.Status,
+	)
 	return aws.ToString(deployment.ServiceDeploymentArn), nil
 }
 
