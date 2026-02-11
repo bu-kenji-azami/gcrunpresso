@@ -342,9 +342,9 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 		if err != nil {
 			return "", fmt.Errorf("failed to list service deployments: %w", err)
 		}
-		d.LogDebug("found %d active service deployments", len(resp.ServiceDeployments))
+		d.LogDebug("found %d service deployments", len(resp.ServiceDeployments))
 		for _, sd := range resp.ServiceDeployments {
-			d.LogInfo("service deployment found",
+			d.LogInfo("service deployment",
 				"arn", arnToName(aws.ToString(sd.ServiceDeploymentArn)),
 				"created_at", sd.CreatedAt,
 				"status", sd.Status,
@@ -366,7 +366,7 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 		case <-tm.C: // Timeout reached
 			return "", ErrNotFound("no active service deployments found")
 		default:
-			d.LogInfo("no active service deployments found, waiting...")
+			d.LogInfo("no service deployments found, waiting...")
 			sleepContext(ctx, delayForServiceChanged)
 		}
 	}
@@ -375,7 +375,7 @@ func (d *App) findActiveECSDeploymentArn(ctx context.Context, timeout time.Durat
 	deployment := lo.MaxBy(activeDeployments, func(item types.ServiceDeploymentBrief, max types.ServiceDeploymentBrief) bool {
 		return item.CreatedAt.After(*max.CreatedAt)
 	})
-	d.LogInfo("wait deployment",
+	d.LogInfo("found deployment",
 		"arn", arnToName(aws.ToString(deployment.ServiceDeploymentArn)),
 		"created_at", deployment.CreatedAt,
 		"status", deployment.Status,
