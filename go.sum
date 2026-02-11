@@ -119,8 +119,8 @@ github.com/aws/aws-sdk-go-v2/service/servicediscovery v1.39.22 h1:wTvgx3mdqEworZ
 github.com/aws/aws-sdk-go-v2/service/servicediscovery v1.39.22/go.mod h1:hxZqho6386LxjZzY2L/d1VlETn7VhBOdVhMGkBJ/IUY=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.5 h1:VrhDvQib/i0lxvr3zqlUwLwJP4fpmpyD9wYG1vfSu+Y=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.5/go.mod h1:k029+U8SY30/3/ras4G/Fnv/b88N4mAfliNn08Dem4M=
-github.com/aws/aws-sdk-go-v2/service/sns v1.26.7 h1:DylmW2c1Z7qGxN3Y02k+voPbtM1mh7Rp+gV+7maG5io=
-github.com/aws/aws-sdk-go-v2/service/sns v1.26.7/go.mod h1:mLFiISZfiZAqZEfPWUsZBK8gD4dYCKuKAfapV+KrIVQ=
+github.com/aws/aws-sdk-go-v2/service/sns v1.34.4 h1:ihddI5wufQQCJiujUgAvWRqZcfDmSKIfXlAuX7T95cg=
+github.com/aws/aws-sdk-go-v2/service/sns v1.34.4/go.mod h1:PJtxxMdj747j8DeZENRTTYAz/lx/pADn/U0k7YNNiUY=
 github.com/aws/aws-sdk-go-v2/service/ssm v1.67.8 h1:31Llf5VfrZ78YvYs7sWcS7L2m3waikzRc6q1nYenVS4=
 github.com/aws/aws-sdk-go-v2/service/ssm v1.67.8/go.mod h1:/jgaDlU1UImoxTxhRNxXHvBAPqPZQ8oCjcPbbkR6kac=
 github.com/aws/aws-sdk-go-v2/service/sso v1.11.22/go.mod h1:B2nDzX7lppT8j4EV2/WhT20SnRDp/LdNyqxyGYY46Ow=
