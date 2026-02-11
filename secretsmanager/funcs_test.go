@@ -25,7 +25,7 @@ func (m *mockSecretsManagerClient) DescribeSecret(ctx context.Context, input *se
 
 func TestJsonnetNativeFuncs(t *testing.T) {
 	app := sm.MockNewApp(&mockSecretsManagerClient{})
-	funcs := app.JsonnetNativeFuncs(context.Background())
+	funcs := app.JsonnetNativeFuncs(t.Context())
 	vm := jsonnet.MakeVM()
 	for _, f := range funcs {
 		vm.NativeFunction(f)

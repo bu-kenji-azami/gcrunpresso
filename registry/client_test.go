@@ -57,7 +57,7 @@ func TestImages(t *testing.T) {
 		}
 		t.Logf("testing %s", fullImage)
 		client := registry.New(c.image, "", "")
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 		if ok, err := client.HasImage(ctx, c.tagOrDigest); err != nil {
 			if isTemporary(err) {
@@ -90,7 +90,7 @@ func TestFailImages(t *testing.T) {
 		}
 		t.Logf("testing (will be fail) %s", fullImage)
 		client := registry.New(c.image, "", "")
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 		if ok, err := client.HasImage(ctx, c.tagOrDigest); err == nil {
 			t.Errorf("HasImage %s error %s", fullImage, err)

@@ -1,7 +1,6 @@
 package ecspresso_test
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -21,7 +20,7 @@ func str[T any](v T) string {
 }
 
 func TestLoadTaskDefinition(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, path := range []string{
 		"tests/td.json",
 		"tests/td-plain.json",
@@ -55,7 +54,7 @@ func TestLoadTaskDefinition(t *testing.T) {
 }
 
 func TestLoadTaskDefinitionTags(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, path := range []string{"tests/td.json", "tests/td-plain.json", "tests/td.jsonnet"} {
 		app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
 			ConfigFilePath: "tests/td-config.yml",

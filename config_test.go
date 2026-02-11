@@ -1,7 +1,6 @@
 package ecspresso_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestLoadServiceDefinition(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{ConfigFilePath: "tests/test.yaml"})
 	if err != nil {
 		t.Error(err)
@@ -64,7 +63,7 @@ func TestLoadConfigWithPluginMultiple(t *testing.T) {
 func TestLoadConfigWithPluginDuplicate(t *testing.T) {
 	t.Setenv("TAG", "testing")
 	t.Setenv("JSON", `{"foo":"bar"}`)
-	ctx := context.Background()
+	ctx := t.Context()
 	loader := ecspresso.NewConfigLoader(nil, nil)
 	_, err := loader.Load(ctx, "tests/config_duplicate_plugins.yaml", "")
 	if err == nil {
@@ -92,7 +91,7 @@ func testLoadConfigWithPlugin(t *testing.T, path string) {
 	t.Setenv("TAG", "testing")
 	t.Setenv("JSON", `{"foo":"bar"}`)
 	t.Setenv("AWS_REGION", "ap-northeast-1")
-	ctx := context.Background()
+	ctx := t.Context()
 	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{ConfigFilePath: path})
 	if err != nil {
 		t.Error(err)
@@ -226,7 +225,7 @@ func TestConfigWithRequiredVersionUnsatisfied(t *testing.T) {
 			ErrorMessage:    "does not satisfy constraints",
 		},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, c := range cases {
 		t.Run(c.CurrentVersion+":"+c.RequiredVersion, func(t *testing.T) {
 			conf := ecspresso.NewDefaultConfig()
@@ -259,7 +258,7 @@ func TestConfigWithInvalidRequiredVersion(t *testing.T) {
 			ErrorMessage:    "invalid format",
 		},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, c := range cases {
 		t.Run(c.CurrentVersion+":"+c.RequiredVersion, func(t *testing.T) {
 			conf := ecspresso.NewDefaultConfig()
@@ -279,7 +278,7 @@ func TestConfigWithInvalidRequiredVersion(t *testing.T) {
 func TestLoadConfigWithoutTimeout(t *testing.T) {
 	t.Setenv("AWS_REGION", "ap-northeast-2")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	loader := ecspresso.NewConfigLoader(nil, nil)
 	conf, err := loader.Load(ctx, "tests/notimeout.yml", "")
 	if err != nil {
@@ -299,7 +298,7 @@ func TestLoadConfigWithoutTimeout(t *testing.T) {
 }
 
 func TestLoadConfigForCodeDeploy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	loader := ecspresso.NewConfigLoader(nil, nil)
 	for _, ext := range []string{"yml", "json", "jsonnet"} {
 		name := "tests/config_codedeploy." + ext
@@ -328,7 +327,7 @@ var FilterCommandTests = []struct {
 }
 
 func TestFilterCommandDeprecated(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, ts := range FilterCommandTests {
 		app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
 			ConfigFilePath: "tests/filter_command.yml",

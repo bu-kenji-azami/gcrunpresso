@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/goccy/go-yaml"
-	"github.com/google/go-jsonnet/formatter"
 )
 
 type RenderOption struct {
@@ -28,7 +27,7 @@ func (d *App) Render(ctx context.Context, opt RenderOption) error {
 				if err != nil {
 					return fmt.Errorf("unable to marshal config to JSON: %w", err)
 				}
-				s, err := formatter.Format("", string(b), formatter.DefaultOptions())
+				s, err := toJsonnetString(string(b), "")
 				if err != nil {
 					return fmt.Errorf("unable to format config as Jsonnet: %w", err)
 				}
@@ -47,7 +46,7 @@ func (d *App) Render(ctx context.Context, opt RenderOption) error {
 			}
 			s := MustMarshalJSONStringForAPI(sv)
 			if opt.Jsonnet {
-				s, err = formatter.Format(d.config.ServiceDefinitionPath, s, formatter.DefaultOptions())
+				s, err = toJsonnetString(s, d.config.ServiceDefinitionPath)
 				if err != nil {
 					return fmt.Errorf("unable to format service definition as Jsonnet: %w", err)
 				}
@@ -62,7 +61,7 @@ func (d *App) Render(ctx context.Context, opt RenderOption) error {
 			}
 			s := MustMarshalJSONStringForAPI(td)
 			if opt.Jsonnet {
-				s, err = formatter.Format(d.config.TaskDefinitionPath, s, formatter.DefaultOptions())
+				s, err = toJsonnetString(s, d.config.TaskDefinitionPath)
 				if err != nil {
 					return fmt.Errorf("unable to format task definition as Jsonnet: %w", err)
 				}
@@ -77,7 +76,7 @@ func (d *App) Render(ctx context.Context, opt RenderOption) error {
 			}
 			s := MustMarshalJSONStringForAPI(sv)
 			if opt.Jsonnet {
-				s, err = formatter.Format(d.config.ExpressDefinitionPath, s, formatter.DefaultOptions())
+				s, err = toJsonnetString(s, d.config.ExpressDefinitionPath)
 				if err != nil {
 					return fmt.Errorf("unable to format express gateway service definition as Jsonnet: %w", err)
 				}

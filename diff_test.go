@@ -2,7 +2,6 @@ package ecspresso_test
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 
@@ -232,7 +231,7 @@ var testServiceDefinitionHasDesiredCount = &ecspresso.Service{
 }
 
 func TestDiffServices(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)
@@ -372,7 +371,7 @@ func TestDiffServices(t *testing.T) {
 }
 
 func TestDiffServicesCodeDeployTargetGroupArn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)
@@ -460,8 +459,70 @@ func TestDiffServicesCodeDeployTargetGroupArn(t *testing.T) {
 	})
 }
 
+func TestDiffJsonnet(t *testing.T) {
+	ctx := t.Context()
+	b := new(bytes.Buffer)
+	opt := &ecspresso.DiffOption{Unified: true, Jsonnet: true}
+	opt.SetWriter(b)
+	color.NoColor = true
+
+	t.Run("jsonnet diff for task defs with difference", func(t *testing.T) {
+		b.Reset()
+		local := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("512"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{
+					Name:  aws.String("app"),
+					Image: aws.String("nginx:latest"),
+				},
+			},
+		}
+		remote := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("1024"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{
+					Name:  aws.String("app"),
+					Image: aws.String("nginx:stable"),
+				},
+			},
+		}
+		diff, err := ecspresso.DiffTaskDefs(ctx, local, remote, "local.jsonnet", "remote", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !diff {
+			t.Fatal("expected diff")
+		}
+		ds := b.String()
+		// jsonnet format uses unquoted keys
+		if strings.Contains(ds, `"memory"`) {
+			t.Errorf("expected jsonnet format (unquoted keys), got JSON: %s", ds)
+		}
+		if !strings.Contains(ds, "memory:") {
+			t.Errorf("expected jsonnet format with 'memory:' key: %s", ds)
+		}
+	})
+
+	t.Run("jsonnet diff for same task defs shows no diff", func(t *testing.T) {
+		b.Reset()
+		td := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("512"),
+		}
+		diff, err := ecspresso.DiffTaskDefs(ctx, td, td, "local.jsonnet", "remote", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff {
+			t.Fatalf("unexpected diff: %s", b.String())
+		}
+	})
+}
+
 func TestDiffTaskDefs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	b := new(bytes.Buffer)
 	opt := &ecspresso.DiffOption{Unified: true}
 	opt.SetWriter(b)

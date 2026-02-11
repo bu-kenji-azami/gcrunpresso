@@ -1058,6 +1058,12 @@ $ ECSPRESSO_DIFF_COMMAND="difft --color=always" ecspresso diff
 
 The command should exit with status 0. If it exits with a non-zero status when two files differ (for example, `diff(1)`), you need to write a wrapper command.
 
+`ecspresso diff --jsonnet` renders the diff output in Jsonnet format instead of JSON. This is useful when you manage definitions in Jsonnet files.
+
+```console
+$ ecspresso diff --jsonnet
+```
+
 
 #### verify
 

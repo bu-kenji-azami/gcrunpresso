@@ -194,7 +194,7 @@ func TestCompareTags(t *testing.T) {
 
 func TestSleepContext(t *testing.T) {
 	t.Run("normal sleep", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		start := time.Now()
 		duration := 100 * time.Millisecond
 
@@ -207,7 +207,7 @@ func TestSleepContext(t *testing.T) {
 	})
 
 	t.Run("context canceled", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		start := time.Now()
 		duration := 1 * time.Second
 
