@@ -170,10 +170,10 @@ func (d *App) newAssumedVerifier(ctx context.Context, cfg aws.Config, executionR
 		RoleSessionName: aws.String("ecspresso-verifier"),
 	})
 	if err != nil {
-		d.LogInfo("failed to assume role to taskExecutionRole. Continue to verify with current session. %s", err.Error())
+		d.LogInfo("failed to assume role to taskExecutionRole, continuing with current session", "error", err.Error())
 		return newVerifier(&cfg, &cfg, opt), nil
 	}
-	d.LogInfo("success to assume role: %s", aws.ToString(executionRole))
+	d.LogInfo("assumed role successfully", "role", aws.ToString(executionRole))
 	ec := aws.Config{}
 	ec.Region = d.config.Region
 	ec.Credentials = credentials.NewStaticCredentialsProvider(
@@ -428,7 +428,7 @@ func (d *App) verifyServiceDefinition(ctx context.Context) error {
 		_, err := vs.VerifyResource(ctx, name, func(context.Context) error {
 			if ebs := vc.ManagedEBSVolume; ebs != nil {
 				if len(ebs.TagSpecifications) > 1 {
-					d.LogWarn("%s has more than one tag specifications. Only the first tag specification is used.", name)
+					d.LogWarn("more than one tag specification, using first only", "resource", name)
 				}
 				roleArn := aws.ToString(ebs.RoleArn)
 				if _, err := vs.VerifyResource(ctx, fmt.Sprintf("RoleArn[%s]", roleArn), func(ctx context.Context) error {
@@ -975,10 +975,10 @@ func (d *App) verifyLogConfiguration(ctx context.Context, c *types.ContainerDefi
 			} else if d.verifier.IsAssumed() {
 				return fmt.Errorf("failed to create log group %s: %w", group, err)
 			} else {
-				d.LogWarn("failed to create log group %s: %s", group, err)
+				d.LogWarn("failed to create log group", "log_group", group, "error", err.Error())
 			}
 		} else {
-			d.LogInfo("created log group %s", group)
+			d.LogInfo("created log group", "log_group", group)
 		}
 	}
 

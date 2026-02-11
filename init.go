@@ -92,7 +92,7 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 	}
 
 	if sv.isExpressMode() {
-		d.LogInfo("%s is an Express Gateway Service", aws.ToString(sv.ServiceName))
+		d.LogInfo("Express Gateway Service detected", "service", aws.ToString(sv.ServiceName))
 		if opt.Express == nil || *opt.Express {
 			ex, sv, err := d.initExpressGatewayService(ctx, sv, opt)
 			if err != nil {
@@ -118,7 +118,7 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 
 func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, opt InitOption, sv *Service, td *TaskDefinitionInput, ex *ExpressGatewayService) error {
 	conf := d.config
-	d.LogInfo("Initializing configuration file to %s...", configFilePath)
+	d.LogInfo("initializing configuration file", "path", configFilePath)
 	if ex != nil {
 		// express
 		conf.Service = aws.ToString(sv.ServiceName)
@@ -135,7 +135,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 		if sv.isCodeDeploy() {
 			info, err := d.findDeploymentInfo(ctx)
 			if err != nil {
-				LogWarn("failed to find CodeDeploy deployment info: %s", err)
+				LogWarn("failed to find CodeDeploy deployment info", "error", err.Error())
 				LogWarn("you need to set config.codedeploy section manually")
 			} else {
 				conf.CodeDeploy = &ConfigCodeDeploy{
@@ -170,7 +170,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 				return fmt.Errorf("unable to marshal config to YAML: %w", err)
 			}
 		}
-		d.LogInfo("save the config to %s", configFilePath)
+		d.LogInfo("saving config", "path", configFilePath)
 		if err := d.saveFile(configFilePath, b, CreateFileMode, opt.ForceOverwrite); err != nil {
 			return err
 		}
@@ -180,7 +180,7 @@ func (d *App) initConfigurationFile(ctx context.Context, configFilePath string, 
 
 func (d *App) initServiceDefinition(ctx context.Context, sv *Service, opt InitOption) (*Service, string, error) {
 	conf := d.config
-	d.LogInfo("Initializing service definition from the service %s...", aws.ToString(sv.ServiceName))
+	d.LogInfo("initializing service definition", "service", aws.ToString(sv.ServiceName))
 
 	svArn := aws.ToString(sv.ServiceArn)
 	if long, _ := isLongArnFormat(svArn); long {
@@ -209,7 +209,7 @@ func (d *App) initServiceDefinition(ctx context.Context, sv *Service, opt InitOp
 			}
 			b = []byte(out)
 		}
-		d.LogInfo("save the service definition %s to %s", svArn, conf.ServiceDefinitionPath)
+		d.LogInfo("saving service definition", "service_arn", svArn, "path", conf.ServiceDefinitionPath)
 		if err := d.saveFile(conf.ServiceDefinitionPath, b, CreateFileMode, opt.ForceOverwrite); err != nil {
 			return nil, "", err
 		}
@@ -219,7 +219,7 @@ func (d *App) initServiceDefinition(ctx context.Context, sv *Service, opt InitOp
 
 func (d *App) initTaskDefinition(ctx context.Context, opt InitOption, tdArn string) (*TaskDefinitionInput, error) {
 	conf := d.config
-	d.LogInfo("Initializing task definition from the task definition %s...", tdArn)
+	d.LogInfo("initializing task definition", "task_definition", tdArn)
 
 	td, err := d.DescribeTaskDefinition(ctx, tdArn)
 	if err != nil {
@@ -238,7 +238,7 @@ func (d *App) initTaskDefinition(ctx context.Context, opt InitOption, tdArn stri
 			}
 			b = []byte(out)
 		}
-		d.LogInfo("save the task definition %s to %s", tdArn, conf.TaskDefinitionPath)
+		d.LogInfo("saving task definition", "task_definition", tdArn, "path", conf.TaskDefinitionPath)
 		if err := d.saveFile(conf.TaskDefinitionPath, b, CreateFileMode, opt.ForceOverwrite); err != nil {
 			return nil, err
 		}
@@ -278,7 +278,7 @@ func (d *App) saveFile(path string, b []byte, mode os.FileMode, force bool) erro
 	if _, err := os.Stat(path); err == nil && !force {
 		ok := prompter.YN(fmt.Sprintf("Overwrite existing file %s?", path), false)
 		if !ok {
-			d.LogInfo("skip %s", path)
+			d.LogInfo("skipping file", "path", path)
 			return nil
 		}
 	}

@@ -40,13 +40,13 @@ func (d *App) Rollback(ctx context.Context, opt RollbackOption) error {
 		return fmt.Errorf("--deregister-task-definition not works with --no-wait together. Please use --no-deregister-task-definition with --no-wait")
 	}
 
-	d.LogInfo("Starting rollback %s", opt.DryRunString())
+	d.LogInfo("Starting rollback", withDryRun(opt.DryRun)...)
 	sv, err := d.DescribeServiceStatus(ctx, 0)
 	if err != nil {
 		return err
 	}
 
-	d.LogInfo("deployment controller: %s", sv.DeploymentController.Type)
+	d.LogInfo("deployment controller", "type", string(sv.DeploymentController.Type))
 	doRollback, err := d.RollbackFunc(sv)
 	if err != nil {
 		return err
@@ -82,13 +82,13 @@ func (d *App) Rollback(ctx context.Context, opt RollbackOption) error {
 	sleepContext(ctx, delayForServiceChanged) // wait for service updated
 	if err := doWait(ctx, sv); err != nil {
 		if errors.As(err, &errNotFound) {
-			d.LogInfo("%s", err)
+			d.LogInfo(err.Error())
 			return d.rollbackTaskDefinition(ctx, rollbackedTdArn, opt)
 		}
 		return err
 	}
 
-	d.LogInfo("Service is %s now. Completed!", opt.WaitUntil)
+	d.LogInfo("service completed", "status", opt.WaitUntil)
 
 	return d.rollbackTaskDefinition(ctx, rollbackedTdArn, opt)
 }
@@ -98,11 +98,11 @@ func (d *App) rollbackTaskDefinition(ctx context.Context, rollbackedTdArn string
 		return nil
 	}
 	if opt.DryRun {
-		d.LogInfo("task definition %s will be deregistered", arnToName(rollbackedTdArn))
+		d.LogInfo("task definition will be deregistered", "task_definition", arnToName(rollbackedTdArn))
 		return nil
 	}
 
-	d.LogInfo("Deregistering the rolled-back task definition %s", arnToName(rollbackedTdArn))
+	d.LogInfo("deregistering rolled-back task definition", "task_definition", arnToName(rollbackedTdArn))
 	_, err := d.ecs.DeregisterTaskDefinition(
 		ctx,
 		&ecs.DeregisterTaskDefinitionInput{
@@ -112,14 +112,14 @@ func (d *App) rollbackTaskDefinition(ctx context.Context, rollbackedTdArn string
 	if err != nil {
 		return fmt.Errorf("failed to deregister task definition: %w", err)
 	}
-	d.LogInfo("%s was deregistered successfully", arnToName(rollbackedTdArn))
+	d.LogInfo("task definition deregistered successfully", "task_definition", arnToName(rollbackedTdArn))
 	return nil
 }
 
 func (d *App) RollbackServiceTasks(ctx context.Context, sv *Service, targetArn string, opt RollbackOption) (string, error) {
 	currentArn := aws.ToString(sv.TaskDefinition)
 
-	d.LogInfo("Rolling back to %s %s", arnToName(targetArn), opt.DryRunString())
+	d.LogInfo("rolling back", withDryRun(opt.DryRun, "target", arnToName(targetArn))...)
 	if opt.DryRun {
 		return currentArn, nil
 	}
@@ -149,7 +149,7 @@ func (d *App) RollbackExpressService(ctx context.Context, sv *Service, _ string,
 		return "", err
 	}
 
-	d.LogInfo("Active deployment found, rolling back deployment %s %s", arnToName(deploymentArn), opt.DryRunString())
+	d.LogInfo("active deployment found, rolling back", withDryRun(opt.DryRun, "deployment", arnToName(deploymentArn))...)
 	return d.rollbackActiveECSDeployment(ctx, sv, deploymentArn, opt)
 }
 
@@ -159,13 +159,13 @@ func (d *App) RollbackECSService(ctx context.Context, sv *Service, targetArn str
 	if err != nil {
 		var errNotFound ErrNotFound
 		if errors.As(err, &errNotFound) {
-			d.LogInfo("No active service deployment found, rolling back service tasks to %s %s", arnToName(targetArn), opt.DryRunString())
+			d.LogInfo("no active deployment, rolling back service tasks", withDryRun(opt.DryRun, "target", arnToName(targetArn))...)
 			return d.RollbackServiceTasks(ctx, sv, targetArn, opt)
 		}
 		return "", err
 	}
 
-	d.LogInfo("Active deployment found, rolling back deployment %s %s", arnToName(deploymentArn), opt.DryRunString())
+	d.LogInfo("active deployment found, rolling back", withDryRun(opt.DryRun, "deployment", arnToName(deploymentArn))...)
 	return d.rollbackActiveECSDeployment(ctx, sv, deploymentArn, opt)
 }
 
@@ -194,12 +194,12 @@ func (d *App) RollbackByCodeDeploy(ctx context.Context, sv *Service, targetArn s
 	}
 	currentDeployment := out.DeploymentInfo
 
-	d.LogInfo("current deployment id: %s", *currentDeployment.DeploymentId)
+	d.LogInfo("current deployment", "deployment_id", *currentDeployment.DeploymentId)
 
 	switch currentDeployment.Status {
 	case cdTypes.DeploymentStatusSucceeded, cdTypes.DeploymentStatusFailed, cdTypes.DeploymentStatusStopped:
 		currentTdArn := aws.ToString(sv.TaskDefinition)
-		d.LogInfo("the deployment in progress is not found, creating a new deployment with %s %s", targetArn, opt.DryRunString())
+		d.LogInfo("deployment not in progress, creating new deployment", withDryRun(opt.DryRun, "target", targetArn)...)
 		if opt.DryRun {
 			return currentTdArn, nil
 		}
@@ -208,7 +208,7 @@ func (d *App) RollbackByCodeDeploy(ctx context.Context, sv *Service, targetArn s
 		}
 		return currentTdArn, nil
 	default: // If the deployment is not yet complete
-		d.LogInfo("the deployment in progress found, stopping the deployment %s %s", *currentDeployment.DeploymentId, opt.DryRunString())
+		d.LogInfo("deployment in progress, stopping", withDryRun(opt.DryRun, "deployment_id", *currentDeployment.DeploymentId)...)
 		tdArn, err := d.findTaskDefinitionOfDeployment(ctx, currentDeployment)
 		if err != nil {
 			return "", fmt.Errorf("failed to find task definition of deployment: %w", err)
@@ -318,8 +318,8 @@ func (d *App) waitForCodeDeployRollback(ctx context.Context, id string) error {
 		status := out.DeploymentInfo.Status
 		rbinfo := out.DeploymentInfo.RollbackInfo
 		if status == cdTypes.DeploymentStatusStopped && rbinfo != nil && rbinfo.RollbackDeploymentId != nil {
-			d.LogInfo("Deployment %s is stopped", id)
-			d.LogInfo("Rollback deployment created: %s", *rbinfo.RollbackDeploymentId)
+			d.LogInfo("deployment stopped", "deployment_id", id)
+			d.LogInfo("rollback deployment created", "deployment_id", *rbinfo.RollbackDeploymentId)
 			return nil
 		}
 		return fmt.Errorf("deployment %s is not stopped yet", id)
@@ -393,9 +393,9 @@ func (d *App) rollbackActiveECSDeployment(ctx context.Context, sv *Service, depl
 	currentTaskDefinition := aws.ToString(sv.TaskDefinition)
 
 	// Stop the deployment with rollback
-	d.LogInfo("Stopping deployment %s with rollback %s", arnToName(deploymentArn), opt.DryRunString())
+	d.LogInfo("stopping deployment with rollback", withDryRun(opt.DryRun, "deployment", arnToName(deploymentArn))...)
 	if opt.DryRun {
-		d.LogInfo("Rollback would be triggered for deployment %s", arnToName(deploymentArn))
+		d.LogInfo("rollback would be triggered", "deployment", arnToName(deploymentArn))
 		return currentTaskDefinition, nil
 	}
 

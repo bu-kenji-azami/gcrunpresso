@@ -12,7 +12,7 @@ import (
 )
 
 func (d *App) createService(ctx context.Context, opt DeployOption) error {
-	d.LogInfo("Starting create service %s", opt.DryRunString())
+	d.LogInfo("Starting create service", withDryRun(opt.DryRun)...)
 	svd, err := d.LoadServiceDefinition(d.config.ServiceDefinitionPath)
 	if err != nil {
 		return err
@@ -43,7 +43,7 @@ func (d *App) createService(ctx context.Context, opt DeployOption) error {
 		if err != nil {
 			return err
 		}
-		d.LogInfo("Using latest task definition %s", tdArn)
+		d.LogInfo("using latest task definition", "task_definition", tdArn)
 	} else {
 		newTd, err := d.RegisterTaskDefinition(ctx, td)
 		if err != nil {
@@ -101,7 +101,7 @@ func (d *App) createService(ctx context.Context, opt DeployOption) error {
 
 	if err := doWait(ctx, sv); err != nil {
 		if errors.As(err, &errNotFound) && sv.isCodeDeploy() {
-			d.LogInfo("%s", err)
+			d.LogInfo(err.Error())
 			return d.WaitTaskSetStable(ctx, sv)
 		}
 		return err
