@@ -253,9 +253,9 @@ func diffExternal(ctx context.Context, diffCmd string, target, remote, local str
 			return fmt.Errorf("failed to create temp dir: %w", err)
 		}
 	}
-	ext := ".json"
+	ext := jsonExt
 	if opt.Jsonnet {
-		ext = ".jsonnet"
+		ext = jsonnetExt
 	}
 	remoteFile := filepath.Join("remote", target+ext)
 	localFile := filepath.Join("local", target+ext)
