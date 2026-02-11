@@ -1177,6 +1177,7 @@ The `docs` command shows the embedded documentation (this README) directly from 
 ```
 Flags:
       --article="readme"          article name to display
+      --list                      list available articles
       --index                     show table of contents
       --search=""                 search keyword in documents
       --json                      output in JSON format
@@ -1208,7 +1209,13 @@ $ ecspresso docs --search "deploy" --json
 
 The JSON output contains structured sections with `level`, `title`, `content`, and `line` fields, making it easy for automated tools and LLM agents to consume ecspresso documentation programmatically.
 
-Available articles: `readme` (default), `skill`.
+List available articles:
+
+```console
+$ ecspresso docs --list
+readme	ecspresso README
+skill	LLM agent skill reference
+```
 
 Show the LLM agent skill guide:
 

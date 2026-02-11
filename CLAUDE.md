@@ -91,6 +91,10 @@ go test -race ./...
   }
   ```
 
+## Documentation
+
+- When adding or changing features, always check README.md for inconsistencies and update it if needed (e.g. command examples, flag lists, log output examples)
+
 ## Code Style
 
 - Use `go fmt ./...` before committing
