@@ -371,6 +371,95 @@ func TestDiffServices(t *testing.T) {
 	})
 }
 
+func TestDiffServicesCodeDeployTargetGroupArn(t *testing.T) {
+	ctx := context.Background()
+	b := new(bytes.Buffer)
+	opt := &ecspresso.DiffOption{Unified: true}
+	opt.SetWriter(b)
+	color.NoColor = true
+
+	t.Run("CodeDeploy service ignores targetGroupArn diff", func(t *testing.T) {
+		b.Reset()
+		local := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentController: &types.DeploymentController{
+					Type: types.DeploymentControllerTypeCodeDeploy,
+				},
+				LoadBalancers: []types.LoadBalancer{
+					{
+						ContainerName:  aws.String("app"),
+						ContainerPort:  aws.Int32(8080),
+						TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/green/1234567890123456"),
+					},
+				},
+			},
+		}
+		remote := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentController: &types.DeploymentController{
+					Type: types.DeploymentControllerTypeCodeDeploy,
+				},
+				LoadBalancers: []types.LoadBalancer{
+					{
+						ContainerName:  aws.String("app"),
+						ContainerPort:  aws.Int32(8080),
+						TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/blue/6543210987654321"),
+					},
+				},
+			},
+		}
+		diff, err := ecspresso.DiffServices(ctx, local, remote, "file", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff {
+			t.Fatalf("unexpected diff for CodeDeploy service: %s", b.String())
+		}
+	})
+
+	t.Run("ECS service detects targetGroupArn diff", func(t *testing.T) {
+		b.Reset()
+		local := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentController: &types.DeploymentController{
+					Type: types.DeploymentControllerTypeEcs,
+				},
+				LoadBalancers: []types.LoadBalancer{
+					{
+						ContainerName:  aws.String("app"),
+						ContainerPort:  aws.Int32(8080),
+						TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/green/1234567890123456"),
+					},
+				},
+			},
+		}
+		remote := &ecspresso.Service{
+			Service: types.Service{
+				DeploymentController: &types.DeploymentController{
+					Type: types.DeploymentControllerTypeEcs,
+				},
+				LoadBalancers: []types.LoadBalancer{
+					{
+						ContainerName:  aws.String("app"),
+						ContainerPort:  aws.Int32(8080),
+						TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/blue/6543210987654321"),
+					},
+				},
+			},
+		}
+		diff, err := ecspresso.DiffServices(ctx, local, remote, "file", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !diff {
+			t.Fatal("expected diff for ECS service with different targetGroupArn")
+		}
+		if ds := b.String(); !strings.Contains(ds, "targetGroupArn") {
+			t.Fatalf("expected diff to contain targetGroupArn: %s", ds)
+		}
+	})
+}
+
 func TestDiffTaskDefs(t *testing.T) {
 	ctx := context.Background()
 	b := new(bytes.Buffer)
