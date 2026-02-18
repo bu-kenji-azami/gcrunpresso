@@ -1114,24 +1114,60 @@ Consider using ecsta as a CLI command.
 The `tasks` command lists tasks run by a service or having the same family to a task definition.
 
 ```
-Flags:
+Usage: ecspresso tasks <command> [flags]
+
+Common flags:
       --id=                       task ID
-      --output=table              output format
-      --find=false                find a task from tasks list and dump it as JSON
-      --stop=false                stop the task
-      --force=false               stop the task without confirmation
-      --trace=false               trace the task
+      --output=table              output format (table, json, tsv)
+
+Commands:
+  tasks list          list tasks (default)
+  tasks find          find a task from tasks list and dump it as JSON
+  tasks stop          stop a task
+  tasks trace         trace a task
+  tasks logs          show logs of a task
 ```
 
-The `--find` option enables task selection rom a list and displays it as JSON.
+##### tasks find
+
+The `find` subcommand enables task selection from a list and displays it as JSON.
 
 The `ECSPRESSO_FILTER_COMMAND` environment variable can be set to specify a command for filtering tasks, such as [peco](https://github.com/peco/peco), [fzf](https://github.com/junegunn/fzf), etc.
 
 ```console
-$ ECSPRESSO_FILTER_COMMAND=peco ecspresso tasks --find
+$ ECSPRESSO_FILTER_COMMAND=peco ecspresso tasks find
 ```
 
-The `--stop` option allows for task selecttion and stopping from a list.
+##### tasks stop
+
+The `stop` subcommand allows for task selection and stopping from a list.
+
+```console
+$ ecspresso tasks stop --force
+```
+
+```
+Flags:
+      --force=false               stop the task without confirmation
+```
+
+##### tasks logs
+
+The `logs` subcommand shows CloudWatch Logs of the task.
+
+```console
+$ ecspresso tasks logs -f -d 5m --container app
+```
+
+```
+Flags:
+  -f, --follow=false              follow logs
+  -d, --duration=1m               duration of logs
+  -s, --start-time=               start time of logs
+      --container=                container name
+```
+
+Use `--follow` to follow logs in real time, `--duration` to specify the time range, and `--start-time` to specify an absolute start time. When `--output json` is set, logs are output as JSON lines.
 
 #### exec
 
@@ -1140,15 +1176,16 @@ The `exec` command executes a command on a task.
 [session-manager-plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) is required in PATH.
 
 ```
-Flags:
+Usage: ecspresso exec <command> [flags]
+
+Common flags:
       --id=                       task ID
-      --command=sh                command to execute
       --container=                container name
-      --port-forward=false        enable port forward
-      --local-port=0              local port number
-      --port=0                    remote port number (required for --port-forward)
-      --host=                     remote host (required for --port-forward)
-      -L                          short expression of local-port:host:port
+
+Commands:
+  exec run              execute command on task (default)
+  exec portforward      port forwarding to a task
+  exec cp <src> <dest>  copy files between local and task
 ```
 
 If `--id` is not set, the command shows a list of tasks to select a task to execute.
@@ -1157,13 +1194,33 @@ The `ECSPRESSO_FILTER_COMMAND` environment variable works the same as with the `
 
 See also the official documentation [Using Amazon ECS Exec for debugging](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-exec.html).
 
-#### port forwarding
+##### exec run
 
-The `--port-forward` option enables port forwarding from a local port to an ECS task's port.
+The `run` subcommand (default) executes a command on a task interactively.
+
+```console
+$ ecspresso exec run --command "ls -la"
+```
 
 ```
-$ ecspresso exec --port-forward --port 80 --local-port 8080
-...
+Flags:
+      --command=sh                command to execute
+```
+
+##### exec portforward
+
+The `portforward` subcommand enables port forwarding from a local port to an ECS task's port.
+
+```console
+$ ecspresso exec portforward --port 80 --local-port 8080
+```
+
+```
+Flags:
+      --local-port=0              local port number
+      --port=0                    remote port number
+      --host=                     remote host
+  -L                              short expression of local-port:host:port
 ```
 
 If `--id` is not set, the command shows a list of tasks to select for port forwarding.
@@ -1172,8 +1229,31 @@ When `--local-port` is not specified, an ephemeral port is used as the local por
 
 The `-L` option is a short expression for `local-port:host:port`. For example, `-L 8080:example.com:80` is equivalent to `--local-port 8080 --host example.com --port 80`.
 
+```console
+$ ecspresso exec portforward -L 8080:example.com:80
 ```
-$ ecspresso exec --port-forward -L 8080:example.com:80
+
+##### exec cp
+
+The `cp` subcommand copies files between local and a running ECS task.
+
+The source and destination arguments use `taskID:/path` format for the remote side. Use `_` as the task ID to select a task interactively.
+
+```console
+# Copy a local file to the task
+$ ecspresso exec cp /local/file.txt _:/remote/file.txt
+
+# Copy a file from the task to local
+$ ecspresso exec cp _:/remote/file.txt /local/file.txt
+
+# Specify a task ID directly
+$ ecspresso exec cp /local/file.txt abcdef1234567890:/remote/file.txt
+```
+
+```
+Flags:
+      --port=12345                port number for file transfer
+      --[no-]progress             show progress bar (default true)
 ```
 
 ### Show documentation
