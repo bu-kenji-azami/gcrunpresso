@@ -1167,7 +1167,7 @@ Flags:
       --container=                container name
 ```
 
-Use `--follow` to follow logs in real time, `--duration` to specify the time range, and `--start-time` to specify an absolute start time. When `--output json` is set, logs are output as JSON lines.
+Use `--follow` to follow logs in real time, `--duration` to specify the time range, and `--start-time` to specify an absolute start time. When `--log-format json` is set, logs are output as JSON lines.
 
 #### exec
 

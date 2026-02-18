@@ -103,7 +103,7 @@ func (d *App) Tasks(ctx context.Context, opt TasksOption) error {
 			Container: opt.Logs.Container,
 			Family:    &family,
 			Service:   service,
-			JSON:      opt.Output == "json",
+			JSON:      logFormat == logFormatJSON,
 		})
 	case opt.List != nil:
 		list := opt.List
@@ -141,7 +141,7 @@ func (d *App) Tasks(ctx context.Context, opt TasksOption) error {
 				Container: list.Container,
 				Family:    &family,
 				Service:   service,
-				JSON:      opt.Output == "json",
+				JSON:      logFormat == logFormatJSON,
 			})
 		default:
 			return ecstaApp.RunList(ctx, &ecsta.ListOption{
