@@ -26,12 +26,6 @@ type ExecRunOption struct {
 	Port        int    `name:"port" hidden:"" default:"0"`
 	Host        string `name:"host" hidden:"" default:""`
 	L           string `name:"L" short:"L" hidden:"" default:""`
-
-	DeprecatedCp bool   `name:"cp" hidden:"" default:"false"`
-	Src          string `arg:"" optional:"" default:""`
-	Dest         string `arg:"" optional:"" default:""`
-	CpPort       int    `name:"cp-port" hidden:"" default:"12345"`
-	Progress     bool   `name:"progress" hidden:"" default:"true" negatable:""`
 }
 
 type ExecPortforwardOption struct {
@@ -101,18 +95,6 @@ func (d *App) Exec(ctx context.Context, opt ExecOption) error {
 	case opt.Run != nil:
 		run := opt.Run
 		switch {
-		case run.DeprecatedCp:
-			LogWarn("--cp flag is deprecated, use 'exec cp' subcommand instead")
-			return ecstaApp.RunCp(ctx, &ecsta.CpOption{
-				Src:       run.Src,
-				Dest:      run.Dest,
-				Port:      run.CpPort,
-				Progress:  run.Progress,
-				ID:        opt.ID,
-				Container: opt.Container,
-				Family:    &family,
-				Service:   service,
-			})
 		case run.PortForward:
 			LogWarn("--port-forward flag is deprecated, use 'exec portforward' subcommand instead")
 			return ecstaApp.RunPortforward(ctx, &ecsta.PortforwardOption{

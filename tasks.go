@@ -24,15 +24,10 @@ type TasksOption struct {
 // TasksListOption is the default subcommand for tasks.
 // Deprecated flags are kept as hidden for backward compatibility.
 type TasksListOption struct {
-	DeprecatedFind  bool          `name:"find" hidden:"" default:"false"`
-	DeprecatedStop  bool          `name:"stop" hidden:"" default:"false"`
-	DeprecatedForce bool          `name:"force" hidden:"" default:"false"`
-	DeprecatedTrace bool          `name:"trace" hidden:"" default:"false"`
-	DeprecatedLogs  bool          `name:"logs" hidden:"" default:"false"`
-	Follow          bool          `name:"follow" short:"f" hidden:"" default:"false"`
-	Duration        time.Duration `name:"duration" short:"d" hidden:"" default:"1m"`
-	StartTime       string        `name:"start-time" short:"s" hidden:"" default:""`
-	Container       string        `name:"container" hidden:"" default:""`
+	DeprecatedFind  bool `name:"find" hidden:"" default:"false"`
+	DeprecatedStop  bool `name:"stop" hidden:"" default:"false"`
+	DeprecatedForce bool `name:"force" hidden:"" default:"false"`
+	DeprecatedTrace bool `name:"trace" hidden:"" default:"false"`
 }
 
 type TasksFindOption struct{}
@@ -130,18 +125,6 @@ func (d *App) Tasks(ctx context.Context, opt TasksOption) error {
 				Duration: time.Minute,
 				Family:   &family,
 				Service:  service,
-			})
-		case list.DeprecatedLogs:
-			LogWarn("--logs flag is deprecated, use 'tasks logs' subcommand instead")
-			return ecstaApp.RunLogs(ctx, &ecsta.LogsOption{
-				ID:        opt.taskID(),
-				Follow:    list.Follow,
-				Duration:  list.Duration,
-				StartTime: list.StartTime,
-				Container: list.Container,
-				Family:    &family,
-				Service:   service,
-				JSON:      logFormat == logFormatJSON,
 			})
 		default:
 			return ecstaApp.RunList(ctx, &ecsta.ListOption{

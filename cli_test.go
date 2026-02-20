@@ -900,9 +900,7 @@ var cliTests = []struct {
 		sub:  "tasks",
 		subOption: &ecspresso.TasksOption{
 			Output: "table",
-			List: &ecspresso.TasksListOption{
-				Duration: time.Minute,
-			},
+			List:   &ecspresso.TasksListOption{},
 		},
 	},
 	// tasks: deprecated flags (backward compat)
@@ -919,7 +917,6 @@ var cliTests = []struct {
 				DeprecatedStop:  true,
 				DeprecatedForce: true,
 				DeprecatedTrace: true,
-				Duration:        time.Minute,
 			},
 		},
 	},
@@ -969,9 +966,7 @@ var cliTests = []struct {
 		sub:  "exec",
 		subOption: &ecspresso.ExecOption{
 			Run: &ecspresso.ExecRunOption{
-				Command:  "sh",
-				CpPort:   12345,
-				Progress: true,
+				Command: "sh",
 			},
 		},
 	},
@@ -996,8 +991,6 @@ var cliTests = []struct {
 				LocalPort:   8080,
 				Port:        80,
 				Host:        "example.com",
-				CpPort:      12345,
-				Progress:    true,
 			},
 		},
 	},
@@ -1039,21 +1032,6 @@ var cliTests = []struct {
 				Dest:     "_:/remote/file.txt",
 				Port:     12345,
 				Progress: false,
-			},
-		},
-	},
-	// exec: deprecated --cp (backward compat)
-	{
-		args: []string{"exec", "--cp", "/local/file.txt", "_:/remote/file.txt"},
-		sub:  "exec",
-		subOption: &ecspresso.ExecOption{
-			Run: &ecspresso.ExecRunOption{
-				Command:      "sh",
-				DeprecatedCp: true,
-				Src:          "/local/file.txt",
-				Dest:         "_:/remote/file.txt",
-				CpPort:       12345,
-				Progress:     true,
 			},
 		},
 	},
