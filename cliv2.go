@@ -25,6 +25,10 @@ func ParseCLIv2(args []string) (string, *CLIOptions, func(), error) {
 	}
 	sub := strings.Fields(c.Command())[0]
 
+	// Kong allocates all cmd:"" pointer fields during parsing.
+	// Clear inactive subcommand pointers so nil checks work for dispatch.
+	clearInactiveSubcommands(&opts, c.Command())
+
 	for _, envFile := range opts.Envfile {
 		if err := ExportEnvFile(envFile); err != nil {
 			return sub, &opts, nil, fmt.Errorf("failed to load envfile: %w", err)
@@ -39,4 +43,49 @@ func ParseCLIv2(args []string) (string, *CLIOptions, func(), error) {
 	}
 	color.NoColor = !opts.Color
 	return sub, &opts, func() { c.PrintUsage(true) }, nil
+}
+
+func clearInactiveSubcommands(opts *CLIOptions, cmd string) {
+	fields := strings.Fields(cmd)
+	if len(fields) < 2 {
+		return
+	}
+	primary, subcmd := fields[0], fields[1]
+
+	switch primary {
+	case "tasks":
+		t := opts.Tasks
+		if t == nil {
+			return
+		}
+		if subcmd != "list" {
+			t.List = nil
+		}
+		if subcmd != "find" {
+			t.Find = nil
+		}
+		if subcmd != "stop" {
+			t.Stop = nil
+		}
+		if subcmd != "trace" {
+			t.Trace = nil
+		}
+		if subcmd != "logs" {
+			t.Logs = nil
+		}
+	case "exec":
+		e := opts.Exec
+		if e == nil {
+			return
+		}
+		if subcmd != "run" {
+			e.Run = nil
+		}
+		if subcmd != "portforward" {
+			e.Portforward = nil
+		}
+		if subcmd != "cp" {
+			e.Cp = nil
+		}
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/google/go-cmp/cmp"
@@ -893,18 +894,16 @@ var cliTests = []struct {
 			Jsonnet: false,
 		},
 	},
+	// tasks: default (list)
 	{
 		args: []string{"tasks"},
 		sub:  "tasks",
 		subOption: &ecspresso.TasksOption{
-			ID:     "",
 			Output: "table",
-			Find:   false,
-			Stop:   false,
-			Force:  false,
-			Trace:  false,
+			List:   &ecspresso.TasksListOption{},
 		},
 	},
+	// tasks: deprecated flags (backward compat)
 	{
 		args: []string{"tasks", "--id", "abcdefff", "--output", "json",
 			"--find", "--stop", "--force", "--trace",
@@ -913,25 +912,65 @@ var cliTests = []struct {
 		subOption: &ecspresso.TasksOption{
 			ID:     "abcdefff",
 			Output: "json",
-			Find:   true,
-			Stop:   true,
-			Force:  true,
-			Trace:  true,
+			List: &ecspresso.TasksListOption{
+				DeprecatedFind:  true,
+				DeprecatedStop:  true,
+				DeprecatedForce: true,
+				DeprecatedTrace: true,
+			},
 		},
 	},
+	// tasks: find subcommand
+	{
+		args: []string{"tasks", "find"},
+		sub:  "tasks",
+		subOption: &ecspresso.TasksOption{
+			Output: "table",
+			Find:   &ecspresso.TasksFindOption{},
+		},
+	},
+	// tasks: stop subcommand with --force
+	{
+		args: []string{"tasks", "stop", "--force"},
+		sub:  "tasks",
+		subOption: &ecspresso.TasksOption{
+			Output: "table",
+			Stop:   &ecspresso.TasksStopOption{Force: true},
+		},
+	},
+	// tasks: trace subcommand
+	{
+		args: []string{"tasks", "trace"},
+		sub:  "tasks",
+		subOption: &ecspresso.TasksOption{
+			Output: "table",
+			Trace:  &ecspresso.TasksTraceOption{},
+		},
+	},
+	// tasks: logs subcommand
+	{
+		args: []string{"tasks", "logs", "-f", "-d", "5m", "--container", "app"},
+		sub:  "tasks",
+		subOption: &ecspresso.TasksOption{
+			Output: "table",
+			Logs: &ecspresso.TasksLogsOption{
+				Follow:    true,
+				Duration:  5 * time.Minute,
+				Container: "app",
+			},
+		},
+	},
+	// exec: default (run)
 	{
 		args: []string{"exec"},
 		sub:  "exec",
 		subOption: &ecspresso.ExecOption{
-			ID:          "",
-			Command:     "sh",
-			Container:   "",
-			LocalPort:   0,
-			Port:        0,
-			PortForward: false,
-			Host:        "",
+			Run: &ecspresso.ExecRunOption{
+				Command: "sh",
+			},
 		},
 	},
+	// exec: deprecated --port-forward (backward compat)
 	{
 		args: []string{"exec",
 			"--id", "abcdefff",
@@ -944,13 +983,56 @@ var cliTests = []struct {
 		},
 		sub: "exec",
 		subOption: &ecspresso.ExecOption{
-			ID:          "abcdefff",
-			Command:     "ls -la",
-			Container:   "mycontainer",
-			LocalPort:   8080,
-			Port:        80,
-			PortForward: true,
-			Host:        "example.com",
+			ID:        "abcdefff",
+			Container: "mycontainer",
+			Run: &ecspresso.ExecRunOption{
+				Command:     "ls -la",
+				PortForward: true,
+				LocalPort:   8080,
+				Port:        80,
+				Host:        "example.com",
+			},
+		},
+	},
+	// exec: portforward subcommand
+	{
+		args: []string{"exec", "--id", "abcdefff", "portforward",
+			"--local-port", "8080", "--port", "80", "--host", "example.com",
+		},
+		sub: "exec",
+		subOption: &ecspresso.ExecOption{
+			ID: "abcdefff",
+			Portforward: &ecspresso.ExecPortforwardOption{
+				LocalPort: 8080,
+				Port:      80,
+				Host:      "example.com",
+			},
+		},
+	},
+	// exec: cp subcommand
+	{
+		args: []string{"exec", "cp", "/local/file.txt", "_:/remote/file.txt"},
+		sub:  "exec",
+		subOption: &ecspresso.ExecOption{
+			Cp: &ecspresso.ExecCpOption{
+				Src:      "/local/file.txt",
+				Dest:     "_:/remote/file.txt",
+				Port:     12345,
+				Progress: true,
+			},
+		},
+	},
+	// exec: cp subcommand with --no-progress
+	{
+		args: []string{"exec", "cp", "--no-progress", "/local/file.txt", "_:/remote/file.txt"},
+		sub:  "exec",
+		subOption: &ecspresso.ExecOption{
+			Cp: &ecspresso.ExecCpOption{
+				Src:      "/local/file.txt",
+				Dest:     "_:/remote/file.txt",
+				Port:     12345,
+				Progress: false,
+			},
 		},
 	},
 }
