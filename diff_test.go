@@ -521,7 +521,7 @@ func TestDiffJsonnet(t *testing.T) {
 	})
 }
 
-func TestDiffNoUpdateService(t *testing.T) {
+func TestDiffWithoutService(t *testing.T) {
 	ctx := t.Context()
 	color.NoColor = true
 
@@ -548,9 +548,9 @@ func TestDiffNoUpdateService(t *testing.T) {
 		},
 	}
 
-	t.Run("NoUpdateService=false shows service diff", func(t *testing.T) {
+	t.Run("WithService=true shows service diff", func(t *testing.T) {
 		b := new(bytes.Buffer)
-		opt := &ecspresso.DiffOption{Unified: true, NoUpdateService: false}
+		opt := &ecspresso.DiffOption{Unified: true, WithService: true}
 		opt.SetWriter(b)
 
 		diff, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt)
@@ -558,16 +558,16 @@ func TestDiffNoUpdateService(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !diff {
-			t.Fatal("expected diff when NoUpdateService is false")
+			t.Fatal("expected diff when WithService is true")
 		}
 		if b.String() == "" {
 			t.Fatal("expected non-empty diff output")
 		}
 	})
 
-	t.Run("NoUpdateService=true produces only task def diff", func(t *testing.T) {
+	t.Run("WithService=false produces only task def diff", func(t *testing.T) {
 		b := new(bytes.Buffer)
-		opt := &ecspresso.DiffOption{Unified: true, NoUpdateService: true}
+		opt := &ecspresso.DiffOption{Unified: true, WithService: false}
 		opt.SetWriter(b)
 
 		localTd := &ecspresso.TaskDefinitionInput{
@@ -585,9 +585,9 @@ func TestDiffNoUpdateService(t *testing.T) {
 			},
 		}
 
-		// Simulate Diff method: when NoUpdateService=true, skip service diff
+		// Simulate Diff method: when WithService=false, skip service diff
 		serviceName := "my-service"
-		if serviceName != "" && !opt.NoUpdateService {
+		if serviceName != "" && opt.WithService {
 			// This block should NOT execute
 			if _, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt); err != nil {
 				t.Fatal(err)
@@ -611,9 +611,9 @@ func TestDiffNoUpdateService(t *testing.T) {
 		}
 	})
 
-	t.Run("NoUpdateService=false produces both service and task def diff", func(t *testing.T) {
+	t.Run("WithService=true produces both service and task def diff", func(t *testing.T) {
 		b := new(bytes.Buffer)
-		opt := &ecspresso.DiffOption{Unified: true, NoUpdateService: false}
+		opt := &ecspresso.DiffOption{Unified: true, WithService: true}
 		opt.SetWriter(b)
 
 		localTd := &ecspresso.TaskDefinitionInput{
@@ -631,9 +631,9 @@ func TestDiffNoUpdateService(t *testing.T) {
 			},
 		}
 
-		// Simulate Diff method: when NoUpdateService=false, run service diff
+		// Simulate Diff method: when WithService=true, run service diff
 		serviceName := "my-service"
-		if serviceName != "" && !opt.NoUpdateService {
+		if serviceName != "" && opt.WithService {
 			if _, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt); err != nil {
 				t.Fatal(err)
 			}

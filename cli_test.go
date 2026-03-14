@@ -844,11 +844,11 @@ var cliTests = []struct {
 		},
 	},
 	{
-		args: []string{"diff", "--no-update-service"},
+		args: []string{"diff", "--without-service"},
 		sub:  "diff",
 		subOption: &ecspresso.DiffOption{
-			Unified:         true,
-			NoUpdateService: true,
+			Unified:     true,
+			WithService: false,
 		},
 	},
 	{

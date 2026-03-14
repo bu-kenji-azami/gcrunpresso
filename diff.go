@@ -30,7 +30,7 @@ type DiffOption struct {
 	Unified         bool   `help:"unified diff format" default:"true" negatable:""`
 	Jsonnet         bool   `help:"render as jsonnet format" default:"false"`
 	External        string `help:"external command to format diff" env:"ECSPRESSO_DIFF_COMMAND"`
-	NoUpdateService bool   `help:"skip diff of service definition" default:"false"`
+	WithService     bool   `help:"with service definition" default:"true" negatable:"without-service"`
 
 	w io.Writer `kong:"-"`
 }
@@ -49,7 +49,7 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 
 	var remoteTaskDefArn string
 	// diff for services only when service defined and not skipped
-	if d.config.Service != "" && !opt.NoUpdateService {
+	if d.config.Service != "" && opt.WithService {
 		d.LogDebug("diff service compare with %s", d.config.Service)
 		newSv, err := d.LoadServiceDefinition(d.config.ServiceDefinitionPath)
 		if err != nil {
