@@ -135,7 +135,7 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 			return fmt.Errorf("failed to diff of service definitions: %w", err)
 		}
 		if differ {
-			if err = d.UpdateServiceAttributes(ctx, newSv, tdArn, opt); err != nil {
+			if err = d.UpdateServiceAttributes(ctx, newSv, opt); err != nil {
 				return err
 			}
 			sv = newSv // updated
@@ -261,17 +261,15 @@ func svToUpdateServiceInput(sv *Service) *ecs.UpdateServiceInput {
 	return in
 }
 
-func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefinitionArn string, opt DeployOption) error {
+func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, opt DeployOption) error {
 	in := svToUpdateServiceInput(sv)
 	if sv.isCodeDeploy() {
 		d.LogInfo("deployment by CodeDeploy")
 		// unable to update attributes below with a CODE_DEPLOY deployment controller.
 		in.NetworkConfiguration = nil
 		in.PlatformVersion = nil
-		in.ForceNewDeployment = false
 		in.LoadBalancers = nil
 		in.ServiceRegistries = nil
-		in.TaskDefinition = nil
 		in.CapacityProviderStrategy = nil
 	} else {
 		if dc := sv.DeploymentConfiguration; dc != nil {
@@ -279,9 +277,12 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 		} else {
 			d.LogInfo("deployment by ECS rolling update")
 		}
-		in.ForceNewDeployment = opt.ForceNewDeployment
-		in.TaskDefinition = aws.String(taskDefinitionArn)
 	}
+	// Do not set TaskDefinition or ForceNewDeployment here.
+	// These are handled by UpdateServiceTasks/DeployByCodeDeploy to avoid
+	// creating duplicate ECS service deployments.
+	in.ForceNewDeployment = false
+	in.TaskDefinition = nil
 	in.Service = aws.String(d.Service)
 	in.Cluster = aws.String(d.Cluster)
 
@@ -290,6 +291,7 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, taskDefi
 		return nil
 	}
 	d.LogInfo("Updating service attributes...")
+	d.LogJSON(in)
 
 	if out, err := d.ecs.UpdateService(ctx, in); err != nil {
 		return fmt.Errorf("failed to update service attributes: %w", err)
