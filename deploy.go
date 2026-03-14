@@ -291,6 +291,7 @@ func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, opt Depl
 		return nil
 	}
 	d.LogInfo("Updating service attributes...")
+	d.LogJSON(in)
 
 	if out, err := d.ecs.UpdateService(ctx, in); err != nil {
 		return fmt.Errorf("failed to update service attributes: %w", err)
