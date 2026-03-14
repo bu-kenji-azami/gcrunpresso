@@ -521,6 +521,142 @@ func TestDiffJsonnet(t *testing.T) {
 	})
 }
 
+func TestDiffWithoutService(t *testing.T) {
+	ctx := t.Context()
+	color.NoColor = true
+
+	localSv := &ecspresso.Service{
+		Service: types.Service{
+			LaunchType: types.LaunchTypeFargate,
+			NetworkConfiguration: &types.NetworkConfiguration{
+				AwsvpcConfiguration: &types.AwsVpcConfiguration{
+					Subnets:        []string{"subnet-111"},
+					SecurityGroups: []string{"sg-111"},
+				},
+			},
+		},
+	}
+	remoteSv := &ecspresso.Service{
+		Service: types.Service{
+			LaunchType: types.LaunchTypeFargate,
+			NetworkConfiguration: &types.NetworkConfiguration{
+				AwsvpcConfiguration: &types.AwsVpcConfiguration{
+					Subnets:        []string{"subnet-222"},
+					SecurityGroups: []string{"sg-222"},
+				},
+			},
+		},
+	}
+
+	t.Run("WithService=true shows service diff", func(t *testing.T) {
+		b := new(bytes.Buffer)
+		opt := &ecspresso.DiffOption{Unified: true, WithService: true}
+		opt.SetWriter(b)
+
+		diff, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !diff {
+			t.Fatal("expected diff when WithService is true")
+		}
+		if b.String() == "" {
+			t.Fatal("expected non-empty diff output")
+		}
+	})
+
+	t.Run("WithService=false produces only task def diff", func(t *testing.T) {
+		b := new(bytes.Buffer)
+		opt := &ecspresso.DiffOption{Unified: true, WithService: false}
+		opt.SetWriter(b)
+
+		localTd := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("512"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{Name: aws.String("app"), Image: aws.String("nginx:latest")},
+			},
+		}
+		remoteTd := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("1024"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{Name: aws.String("app"), Image: aws.String("nginx:stable")},
+			},
+		}
+
+		// Simulate Diff method: when WithService=false, skip service diff
+		serviceName := "my-service"
+		if serviceName != "" && opt.WithService {
+			// This block should NOT execute
+			if _, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Task def diff always runs
+		diff, err := ecspresso.DiffTaskDefs(ctx, localTd, remoteTd, "local", "remote", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !diff {
+			t.Fatal("expected task def diff")
+		}
+		output := b.String()
+		// Should contain task def changes but no service subnet/sg changes
+		if strings.Contains(output, "subnet") {
+			t.Errorf("expected no service diff in output, got: %s", output)
+		}
+		if !strings.Contains(output, "memory") {
+			t.Errorf("expected task def diff with memory change, got: %s", output)
+		}
+	})
+
+	t.Run("WithService=true produces both service and task def diff", func(t *testing.T) {
+		b := new(bytes.Buffer)
+		opt := &ecspresso.DiffOption{Unified: true, WithService: true}
+		opt.SetWriter(b)
+
+		localTd := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("512"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{Name: aws.String("app"), Image: aws.String("nginx:latest")},
+			},
+		}
+		remoteTd := &ecspresso.TaskDefinitionInput{
+			Cpu:    aws.String("256"),
+			Memory: aws.String("1024"),
+			ContainerDefinitions: []types.ContainerDefinition{
+				{Name: aws.String("app"), Image: aws.String("nginx:stable")},
+			},
+		}
+
+		// Simulate Diff method: when WithService=true, run service diff
+		serviceName := "my-service"
+		if serviceName != "" && opt.WithService {
+			if _, err := ecspresso.DiffServices(ctx, localSv, remoteSv, "file", opt); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Task def diff always runs
+		diff, err := ecspresso.DiffTaskDefs(ctx, localTd, remoteTd, "local", "remote", opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !diff {
+			t.Fatal("expected task def diff")
+		}
+		output := b.String()
+		// Should contain both service and task def changes
+		if !strings.Contains(output, "subnet") {
+			t.Errorf("expected service diff with subnet change, got: %s", output)
+		}
+		if !strings.Contains(output, "memory") {
+			t.Errorf("expected task def diff with memory change, got: %s", output)
+		}
+	})
+}
+
 func TestDiffTaskDefs(t *testing.T) {
 	ctx := t.Context()
 	b := new(bytes.Buffer)

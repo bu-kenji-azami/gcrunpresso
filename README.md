@@ -1064,6 +1064,12 @@ The command should exit with status 0. If it exits with a non-zero status when t
 $ ecspresso diff --jsonnet
 ```
 
+`ecspresso diff --without-service` skips the diff of the service definition and only shows the diff of the task definition.
+
+```console
+$ ecspresso diff --without-service
+```
+
 
 #### verify
 
