@@ -844,6 +844,14 @@ var cliTests = []struct {
 		},
 	},
 	{
+		args: []string{"diff", "--no-update-service"},
+		sub:  "diff",
+		subOption: &ecspresso.DiffOption{
+			Unified:         true,
+			NoUpdateService: true,
+		},
+	},
+	{
 		args: []string{"appspec"},
 		sub:  "appspec",
 		subOption: &ecspresso.AppSpecOption{
