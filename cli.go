@@ -39,7 +39,7 @@ type CLIOptions struct {
 	Tasks      *TasksOption      `cmd:"" help:"list tasks that are in a service or having the same family"`
 	Verify     *VerifyOption     `cmd:"" help:"verify resources in configurations"`
 	Wait       *WaitOption       `cmd:"" help:"wait until service stable"`
-	Skills     struct{}          `cmd:"" help:"manage agent skills"`
+	Skills     *SkillsOption     `cmd:"" help:"manage agent skills"`
 	Version    struct{}          `cmd:"" help:"show version"`
 }
 
@@ -101,6 +101,8 @@ func (opts *CLIOptions) ForSubCommand(sub string) any {
 		return opts.Verify
 	case "wait":
 		return opts.Wait
+	case "skills":
+		return opts.Skills
 	default:
 		return nil
 	}
@@ -113,6 +115,8 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 		return err
 	case "docs":
 		return Docs(*opts.Docs)
+	case "skills":
+		return dispatchSkills(ctx, opts.Skills)
 	}
 	var appOpts []AppOption
 	if sub == "init" {
@@ -175,17 +179,7 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 type CLIParseFunc func([]string) (string, *CLIOptions, func(), error)
 
 func CLI(ctx context.Context, parse CLIParseFunc) (int, error) {
-	// Handle "skills" subcommand before Kong parsing.
-	// skillsmith uses its own flag package for argument parsing.
-	args := os.Args[1:]
-	if len(args) > 0 && args[0] == "skills" {
-		if err := Skills(ctx, args[1:]); err != nil {
-			return 1, err
-		}
-		return 0, nil
-	}
-
-	sub, opts, usage, err := parse(args)
+	sub, opts, usage, err := parse(os.Args[1:])
 	if err != nil {
 		return 1, err
 	}
