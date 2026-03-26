@@ -7,16 +7,12 @@ import (
 	"github.com/kayac/ecspresso/v2/skillscmd"
 )
 
-func newSmith() (*skillsmith.Smith, error) {
+func dispatchSkills(ctx context.Context, opts *skillscmd.Commands) error {
 	version := Version
 	if version == "" {
 		version = "v0.0.0-dev"
 	}
-	return skillsmith.New("ecspresso", version, skillsFS)
-}
-
-func dispatchSkills(ctx context.Context, opts *skillscmd.Commands) error {
-	s, err := newSmith()
+	s, err := skillsmith.New("ecspresso", version, skillsFS)
 	if err != nil {
 		return err
 	}
