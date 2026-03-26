@@ -1,9 +1,10 @@
 module github.com/kayac/ecspresso/v2
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/Songmu/prompter v0.5.1
+	github.com/Songmu/skillsmith v0.0.2
 	github.com/alecthomas/kong v1.14.0
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
@@ -144,6 +145,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect

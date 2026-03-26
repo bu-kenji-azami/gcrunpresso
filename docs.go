@@ -10,7 +10,7 @@ import (
 
 // DocsOption defines CLI options for the docs subcommand.
 type DocsOption struct {
-	Article string `help:"article name to display" default:"readme" enum:"readme,skill"`
+	Article string `help:"article name to display" default:"readme" enum:"readme"`
 	List    bool   `help:"list available articles" default:"false"`
 	Index   bool   `help:"show table of contents" default:"false"`
 	Search  string `help:"search keyword in documents" default:""`
@@ -38,7 +38,6 @@ type docsArticle struct {
 
 var articles = []docsArticle{
 	{Name: "readme", Description: "ecspresso README"},
-	{Name: "skill", Description: "LLM agent skill reference"},
 }
 
 // Docs shows embedded documentation.
@@ -68,8 +67,6 @@ func getArticle(name string) (string, error) {
 	switch name {
 	case "readme":
 		return readmeContent, nil
-	case "skill":
-		return skillContent, nil
 	default:
 		return "", fmt.Errorf("unknown article: %s", name)
 	}

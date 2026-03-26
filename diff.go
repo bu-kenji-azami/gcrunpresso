@@ -27,10 +27,10 @@ import (
 )
 
 type DiffOption struct {
-	Unified         bool   `help:"unified diff format" default:"true" negatable:""`
-	Jsonnet         bool   `help:"render as jsonnet format" default:"false"`
-	External        string `help:"external command to format diff" env:"ECSPRESSO_DIFF_COMMAND"`
-	WithService     bool   `help:"with service definition" default:"true" negatable:"without-service"`
+	Unified     bool   `help:"unified diff format" default:"true" negatable:""`
+	Jsonnet     bool   `help:"render as jsonnet format" default:"false"`
+	External    string `help:"external command to format diff" env:"ECSPRESSO_DIFF_COMMAND"`
+	WithService bool   `help:"with service definition" default:"true" negatable:"without-service"`
 
 	w io.Writer `kong:"-"`
 }

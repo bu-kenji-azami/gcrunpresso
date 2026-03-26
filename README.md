@@ -1306,24 +1306,32 @@ List available articles:
 ```console
 $ ecspresso docs --list
 readme	ecspresso README
-skill	LLM agent skill reference
-```
-
-Show the LLM agent skill guide:
-
-```console
-$ ecspresso docs --article skill
 ```
 
 ### LLM agent integration
 
 ecspresso provides a skill guide for LLM agents (such as Claude Code, ChatGPT, etc.) to use ecspresso effectively. The skill guide covers common workflows, command usage patterns, and best practices including the recommendation to use Jsonnet over JSON/YAML for definition files.
 
-The skill guide is embedded in the binary and can be accessed via `ecspresso docs --article skill`. No separate file installation is needed.
+The skill is distributed via the `skills` subcommand using the [Agent Skills](https://agentskills.io/) specification. Install the skill with:
+
+```console
+$ ecspresso skills install
+```
+
+The `skills` subcommand provides the following operations:
+
+```console
+$ ecspresso skills list        # List available skills
+$ ecspresso skills install     # Install skills to ~/.agents/skills
+$ ecspresso skills update      # Update installed skills
+$ ecspresso skills uninstall   # Remove installed skills
+$ ecspresso skills status      # Show installation status
+$ ecspresso skills reinstall   # Reinstall all managed skills
+```
 
 To integrate ecspresso with an LLM agent:
 
-1. Add a line to the agent's instructions (e.g., CLAUDE.md): `Run ecspresso docs --article skill to learn how to use ecspresso.`
+1. Run `ecspresso skills install` to install the skill.
 2. The agent can then use `ecspresso docs --search "<keyword>" --json` to look up specific topics at runtime.
 
 This combination allows an LLM agent to deploy, manage, and troubleshoot ECS services through ecspresso with minimal human guidance.
