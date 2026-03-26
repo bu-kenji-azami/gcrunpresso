@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"time"
+
+	"github.com/kayac/ecspresso/v2/skillscmd"
 )
 
 type CLIOptions struct {
@@ -39,7 +41,7 @@ type CLIOptions struct {
 	Tasks      *TasksOption      `cmd:"" help:"list tasks that are in a service or having the same family"`
 	Verify     *VerifyOption     `cmd:"" help:"verify resources in configurations"`
 	Wait       *WaitOption       `cmd:"" help:"wait until service stable"`
-	Skills     *SkillsOption     `cmd:"" help:"manage agent skills"`
+	Skills     *skillscmd.Commands `cmd:"" help:"manage agent skills"`
 	Version    struct{}          `cmd:"" help:"show version"`
 }
 
