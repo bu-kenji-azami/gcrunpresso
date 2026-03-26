@@ -110,6 +110,9 @@ func (opts *CLIOptions) ForSubCommand(sub string) any {
 	}
 }
 
+// dispatchCLI routes the subcommand to the appropriate handler.
+// Commands that do not require AWS credentials or config are handled
+// directly. All others are delegated to dispatchApp.
 func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions) error {
 	switch sub {
 	case "version", "":
@@ -119,7 +122,14 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 		return Docs(*opts.Docs)
 	case "skills":
 		return dispatchSkills(ctx, opts.Skills)
+	default:
+		return dispatchApp(ctx, sub, usage, opts)
 	}
+}
+
+// dispatchApp handles subcommands that require an App instance
+// (AWS credentials and config).
+func dispatchApp(ctx context.Context, sub string, usage func(), opts *CLIOptions) error {
 	var appOpts []AppOption
 	if sub == "init" {
 		config, err := opts.Init.NewConfig(ctx, opts.ConfigFilePath)
@@ -174,8 +184,8 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 		return app.Exec(ctx, *opts.Exec)
 	default:
 		usage()
+		return nil
 	}
-	return nil
 }
 
 type CLIParseFunc func([]string) (string, *CLIOptions, func(), error)
