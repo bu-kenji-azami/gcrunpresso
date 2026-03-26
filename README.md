@@ -1310,7 +1310,7 @@ readme	ecspresso README
 
 ### LLM agent integration
 
-ecspresso provides an [Agent Skill](https://agentskills.io/) for LLM agents (Claude Code, GitHub Copilot, OpenAI Codex, etc.) to use ecspresso effectively. The skill covers common workflows, command usage patterns, and best practices.
+ecspresso provides an [Agent Skill](https://agentskills.io/) for LLM agents (Claude Code, GitHub Copilot, OpenAI Codex, etc.) to use ecspresso effectively. The skill covers common workflows, command usage patterns, and best practices. Powered by [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 Install the skill for your user:
 
