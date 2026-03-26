@@ -116,15 +116,19 @@ func (opts *CLIOptions) ForSubCommand(sub string) any {
 func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions) error {
 	switch sub {
 	case "version", "":
-		_, err := WriteOutput("ecspresso " + Version)
-		return err
+		return showVersion()
 	case "docs":
-		return Docs(*opts.Docs)
+		return dispatchDocs(opts.Docs)
 	case "skills":
 		return dispatchSkills(ctx, opts.Skills)
 	default:
 		return dispatchApp(ctx, sub, usage, opts)
 	}
+}
+
+func showVersion() error {
+	_, err := WriteOutput("ecspresso " + Version)
+	return err
 }
 
 // dispatchApp handles subcommands that require an App instance

@@ -40,6 +40,10 @@ var articles = []docsArticle{
 	{Name: "readme", Description: "ecspresso README"},
 }
 
+func dispatchDocs(opt *DocsOption) error {
+	return Docs(*opt)
+}
+
 // Docs shows embedded documentation.
 func Docs(opt DocsOption) error {
 	jsonOutput := opt.JSON || logFormat == logFormatJSON
