@@ -1310,31 +1310,33 @@ readme	ecspresso README
 
 ### LLM agent integration
 
-ecspresso provides a skill guide for LLM agents (such as Claude Code, ChatGPT, etc.) to use ecspresso effectively. The skill guide covers common workflows, command usage patterns, and best practices including the recommendation to use Jsonnet over JSON/YAML for definition files.
+ecspresso provides an [Agent Skill](https://agentskills.io/) for LLM agents (Claude Code, GitHub Copilot, OpenAI Codex, etc.) to use ecspresso effectively. The skill covers common workflows, command usage patterns, and best practices.
 
-The skill is distributed via the `skills` subcommand using the [Agent Skills](https://agentskills.io/) specification. Install the skill with:
+Install the skill for your user:
 
 ```console
 $ ecspresso skills install
 ```
 
-The `skills` subcommand provides the following operations:
+This installs the skill to `~/.agents/skills/ecspresso/SKILL.md`. Compatible LLM agents automatically discover skills in this directory — no additional configuration is needed.
+
+To share the skill with your team via the repository, use `--scope repo`:
+
+```console
+$ ecspresso skills install --scope repo
+```
+
+This installs to `.agents/skills/` in the repository root. Commit this directory so that team members' agents can use the skill without installing it individually.
+
+Other `skills` operations:
 
 ```console
 $ ecspresso skills list        # List available skills
-$ ecspresso skills install     # Install skills to ~/.agents/skills
+$ ecspresso skills status      # Show installation status
 $ ecspresso skills update      # Update installed skills
 $ ecspresso skills uninstall   # Remove installed skills
-$ ecspresso skills status      # Show installation status
 $ ecspresso skills reinstall   # Reinstall all managed skills
 ```
-
-To integrate ecspresso with an LLM agent:
-
-1. Run `ecspresso skills install` to install the skill.
-2. The agent can then use `ecspresso docs --search "<keyword>" --json` to look up specific topics at runtime.
-
-This combination allows an LLM agent to deploy, manage, and troubleshoot ECS services through ecspresso with minimal human guidance.
 
 ## Plugins
 
