@@ -118,7 +118,7 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 	case "version", "":
 		return showVersion()
 	case "docs":
-		return dispatchDocs(opts.Docs)
+		return dispatchDocs(ctx, opts.Docs)
 	case "skills":
 		return dispatchSkills(ctx, opts.Skills)
 	default:

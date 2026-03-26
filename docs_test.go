@@ -173,14 +173,14 @@ func TestDocsOptionDefault(t *testing.T) {
 }
 
 func TestDocsListText(t *testing.T) {
-	err := ecspresso.Docs(ecspresso.DocsOption{List: true})
+	err := ecspresso.Docs(t.Context(), ecspresso.DocsOption{List: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDocsListJSON(t *testing.T) {
-	err := ecspresso.Docs(ecspresso.DocsOption{List: true, JSON: true})
+	err := ecspresso.Docs(t.Context(), ecspresso.DocsOption{List: true, JSON: true})
 	if err != nil {
 		t.Fatal(err)
 	}

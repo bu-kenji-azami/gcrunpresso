@@ -1,6 +1,7 @@
 package ecspresso
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,12 +41,12 @@ var articles = []docsArticle{
 	{Name: "readme", Description: "ecspresso README"},
 }
 
-func dispatchDocs(opt *DocsOption) error {
-	return Docs(*opt)
+func dispatchDocs(ctx context.Context, opt *DocsOption) error {
+	return Docs(ctx, *opt)
 }
 
 // Docs shows embedded documentation.
-func Docs(opt DocsOption) error {
+func Docs(_ context.Context, opt DocsOption) error {
 	jsonOutput := opt.JSON || logFormat == logFormatJSON
 
 	if opt.List {
