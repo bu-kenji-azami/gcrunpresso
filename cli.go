@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"time"
+
+	"github.com/kayac/ecspresso/v2/skillscmd"
 )
 
 type CLIOptions struct {
@@ -39,6 +41,7 @@ type CLIOptions struct {
 	Tasks      *TasksOption      `cmd:"" help:"list tasks that are in a service or having the same family"`
 	Verify     *VerifyOption     `cmd:"" help:"verify resources in configurations"`
 	Wait       *WaitOption       `cmd:"" help:"wait until service stable"`
+	Skills     *skillscmd.Commands `cmd:"" help:"manage agent skills"`
 	Version    struct{}          `cmd:"" help:"show version"`
 }
 
@@ -100,19 +103,37 @@ func (opts *CLIOptions) ForSubCommand(sub string) any {
 		return opts.Verify
 	case "wait":
 		return opts.Wait
+	case "skills":
+		return opts.Skills
 	default:
 		return nil
 	}
 }
 
+// dispatchCLI routes the subcommand to the appropriate handler.
+// Commands that do not require AWS credentials or config are handled
+// directly. All others are delegated to dispatchApp.
 func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions) error {
 	switch sub {
 	case "version", "":
-		_, err := WriteOutput("ecspresso " + Version)
-		return err
+		return showVersion()
 	case "docs":
-		return Docs(*opts.Docs)
+		return dispatchDocs(ctx, opts.Docs)
+	case "skills":
+		return dispatchSkills(ctx, opts.Skills)
+	default:
+		return dispatchApp(ctx, sub, usage, opts)
 	}
+}
+
+func showVersion() error {
+	_, err := WriteOutput("ecspresso " + Version)
+	return err
+}
+
+// dispatchApp handles subcommands that require an App instance
+// (AWS credentials and config).
+func dispatchApp(ctx context.Context, sub string, usage func(), opts *CLIOptions) error {
 	var appOpts []AppOption
 	if sub == "init" {
 		config, err := opts.Init.NewConfig(ctx, opts.ConfigFilePath)
@@ -167,8 +188,8 @@ func dispatchCLI(ctx context.Context, sub string, usage func(), opts *CLIOptions
 		return app.Exec(ctx, *opts.Exec)
 	default:
 		usage()
+		return nil
 	}
-	return nil
 }
 
 type CLIParseFunc func([]string) (string, *CLIOptions, func(), error)

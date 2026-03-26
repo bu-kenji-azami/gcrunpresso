@@ -1,3 +1,16 @@
+---
+name: ecspresso
+description: ECS deployment tool - deploy, manage, and troubleshoot ECS services
+license: MIT
+compatibility:
+  - claude
+  - codex
+  - agents
+allowed_tools:
+  - Bash
+  - Read
+---
+
 # ecspresso Skill for LLM Agents
 
 ## Overview

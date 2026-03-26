@@ -87,5 +87,28 @@ func clearInactiveSubcommands(opts *CLIOptions, cmd string) {
 		if subcmd != "cp" {
 			e.Cp = nil
 		}
+	case "skills":
+		s := opts.Skills
+		if s == nil {
+			return
+		}
+		if subcmd != "list" {
+			s.List = nil
+		}
+		if subcmd != "install" {
+			s.Install = nil
+		}
+		if subcmd != "update" {
+			s.Update = nil
+		}
+		if subcmd != "reinstall" {
+			s.Reinstall = nil
+		}
+		if subcmd != "uninstall" {
+			s.Uninstall = nil
+		}
+		if subcmd != "status" {
+			s.Status = nil
+		}
 	}
 }
