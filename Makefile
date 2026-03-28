@@ -4,7 +4,7 @@ DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
 .PHONY: test binary install clean
 
 cmd/ecspresso/ecspresso: *.go cmd/ecspresso/*.go go.* */*.go
-	cd cmd/ecspresso && go build -ldflags "-s -w -X main.Version=${GIT_VER} -X main.buildDate=${DATE}" -trimpath
+	cd cmd/ecspresso && go build -tags "no_gcs,no_azurerm" -ldflags "-s -w -X main.Version=${GIT_VER} -X main.buildDate=${DATE}" -trimpath
 
 install: cmd/ecspresso/ecspresso
 	install cmd/ecspresso/ecspresso `go env GOPATH`/bin/ecspresso

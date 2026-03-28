@@ -9,6 +9,9 @@ builds:
       - CGO_ENABLED=0
     main: ./cmd/ecspresso/
     binary: ecspresso
+    tags:
+      - no_gcs
+      - no_azurerm
     ldflags:
       - -s -w
       - -X main.Version=v{{.Version}}
