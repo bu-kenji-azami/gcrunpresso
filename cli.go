@@ -22,27 +22,27 @@ type CLIOptions struct {
 	Color          bool              `help:"enable colorized output" env:"ECSPRESSO_COLOR" default:"true" negatable:""`
 	LogFormat      string            `help:"log format" env:"ECSPRESSO_LOG_FORMAT" default:"text" enum:"text,json"`
 
-	Appspec    *AppSpecOption    `cmd:"" help:"output AppSpec YAML for CodeDeploy to STDOUT"`
-	Delete     *DeleteOption     `cmd:"" help:"delete service"`
-	Deploy     *DeployOption     `cmd:"" help:"deploy service"`
-	Deregister *DeregisterOption `cmd:"" help:"deregister task definition"`
-	Diff       *DiffOption       `cmd:"" help:"show diff between task definition, service definition with current running service and task definition"`
-	Docs       *DocsOption       `cmd:"" help:"show documentation for ecspresso"`
-	Exec       *ExecOption       `cmd:"" help:"execute command on task"`
-	Init       *InitOption       `cmd:"" help:"create configuration files from existing ECS service"`
-	Refresh    *RefreshOption    `cmd:"" help:"refresh service. equivalent to deploy --skip-task-definition --force-new-deployment --no-update-service"`
-	Register   *RegisterOption   `cmd:"" help:"register task definition"`
-	Render     *RenderOption     `cmd:"" help:"render config, service definition or task definition file to STDOUT"`
-	Revisions  *RevisionsOption  `cmd:"" help:"show revisions of task definitions"`
-	Rollback   *RollbackOption   `cmd:"" help:"rollback service"`
-	Run        *RunOption        `cmd:"" help:"run task"`
-	Scale      *ScaleOption      `cmd:"" help:"scale service. equivalent to deploy --skip-task-definition --no-update-service"`
-	Status     *StatusOption     `cmd:"" help:"show status of service"`
-	Tasks      *TasksOption      `cmd:"" help:"list tasks that are in a service or having the same family"`
-	Verify     *VerifyOption     `cmd:"" help:"verify resources in configurations"`
-	Wait       *WaitOption       `cmd:"" help:"wait until service stable"`
+	Appspec    *AppSpecOption      `cmd:"" help:"output AppSpec YAML for CodeDeploy to STDOUT"`
+	Delete     *DeleteOption       `cmd:"" help:"delete service"`
+	Deploy     *DeployOption       `cmd:"" help:"deploy service"`
+	Deregister *DeregisterOption   `cmd:"" help:"deregister task definition"`
+	Diff       *DiffOption         `cmd:"" help:"show diff between task definition, service definition with current running service and task definition"`
+	Docs       *DocsOption         `cmd:"" help:"show documentation for ecspresso"`
+	Exec       *ExecOption         `cmd:"" help:"execute command on task"`
+	Init       *InitOption         `cmd:"" help:"create configuration files from existing ECS service"`
+	Refresh    *RefreshOption      `cmd:"" help:"refresh service. equivalent to deploy --skip-task-definition --force-new-deployment --no-update-service"`
+	Register   *RegisterOption     `cmd:"" help:"register task definition"`
+	Render     *RenderOption       `cmd:"" help:"render config, service definition or task definition file to STDOUT"`
+	Revisions  *RevisionsOption    `cmd:"" help:"show revisions of task definitions"`
+	Rollback   *RollbackOption     `cmd:"" help:"rollback service"`
+	Run        *RunOption          `cmd:"" help:"run task"`
+	Scale      *ScaleOption        `cmd:"" help:"scale service. equivalent to deploy --skip-task-definition --no-update-service"`
+	Status     *StatusOption       `cmd:"" help:"show status of service"`
+	Tasks      *TasksOption        `cmd:"" help:"list tasks that are in a service or having the same family"`
+	Verify     *VerifyOption       `cmd:"" help:"verify resources in configurations"`
+	Wait       *WaitOption         `cmd:"" help:"wait until service stable"`
 	Skills     *skillscmd.Commands `cmd:"" help:"manage agent skills"`
-	Version    struct{}          `cmd:"" help:"show version"`
+	Version    struct{}            `cmd:"" help:"show version"`
 }
 
 func (opt *CLIOptions) resolveConfigFilePath() (path string) {
