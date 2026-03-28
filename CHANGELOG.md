@@ -1,5 +1,34 @@
 # Changelog
 
+## [v2.8.0](https://github.com/kayac/ecspresso/compare/v2.7.1...v2.8.0) - 2026-03-28
+- Use structured slog attributes for log messages by @fujiwara in https://github.com/kayac/ecspresso/pull/939
+- Add docs subcommand and LLM agent skill guide by @fujiwara in https://github.com/kayac/ecspresso/pull/937
+- Add --list flag to docs command by @fujiwara in https://github.com/kayac/ecspresso/pull/941
+- Bump actions/checkout from 6.0.0 to 6.0.2 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/935
+- Bump Songmu/tagpr from 1.9.0 to 1.14.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/934
+- Bump actions/setup-go from 6.1.0 to 6.2.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/933
+- Bump docker/setup-buildx-action from 3.11.1 to 3.12.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/928
+- Bump github.com/google/go-cmp from 0.6.0 to 0.7.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/925
+- Bump github.com/fujiwara/ecsta from 0.4.5 to 0.7.4 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/924
+- Bump github.com/alecthomas/kong from 1.10.0 to 1.13.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/922
+- Bump the aws-sdk-go-v2 group with 17 updates by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/921
+- Update olekukonko/tablewriter to v1 and ecsta to v0.8.0 by @fujiwara in https://github.com/kayac/ecspresso/pull/942
+- Ignore targetGroupArn diff for CodeDeploy services by @fujiwara in https://github.com/kayac/ecspresso/pull/943
+- Add --jsonnet flag to diff command by @fujiwara in https://github.com/kayac/ecspresso/pull/944
+- Fix waiting for stale deployment by @fujiwara in https://github.com/kayac/ecspresso/pull/945
+- Refactor tasks and exec to use subcommands by @fujiwara in https://github.com/kayac/ecspresso/pull/950
+- Bump github.com/hashicorp/go-version from 1.7.0 to 1.8.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/949
+- Bump github.com/goccy/go-yaml from 1.19.0 to 1.19.2 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/948
+- feat: support --with-service/--without-service flag for diff command by @neilkuan in https://github.com/kayac/ecspresso/pull/962
+- Fix duplicate ECS service deployments when service attributes change by @fujiwara in https://github.com/kayac/ecspresso/pull/961
+- Bump github.com/fujiwara/tfstate-lookup from 1.8.1 to 1.10.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/947
+- Bump google.golang.org/grpc from 1.76.0 to 1.79.3 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/965
+- Add skills subcommand using skillsmith by @fujiwara in https://github.com/kayac/ecspresso/pull/966
+- Bump go.opentelemetry.io/otel/sdk from 1.38.0 to 1.40.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/964
+- Bump dependencies: AWS SDK, Go modules, and GitHub Actions by @fujiwara in https://github.com/kayac/ecspresso/pull/967
+- Bump docker/login-action from 3.6.0 to 3.7.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/954
+- Reduce binary size by disabling unused tfstate backends by @fujiwara in https://github.com/kayac/ecspresso/pull/968
+
 ## [v2.7.1](https://github.com/kayac/ecspresso/compare/v2.7.0...v2.7.1) - 2026-02-05
 - add debug logs by @fujiwara in https://github.com/kayac/ecspresso/pull/930
 - fix verify to parse IAM Trust Policy with array format Principal.Service by @fujiwara in https://github.com/kayac/ecspresso/pull/932
