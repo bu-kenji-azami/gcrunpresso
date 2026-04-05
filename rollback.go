@@ -124,8 +124,12 @@ func (d *App) RollbackServiceTasks(ctx context.Context, sv *Service, targetArn s
 		return currentArn, nil
 	}
 
-	if err := d.UpdateServiceTasks(
+	if err := d.DeployByECS(
 		ctx,
+		&ecs.UpdateServiceInput{
+			Service: sv.ServiceName,
+			Cluster: aws.String(d.Cluster),
+		},
 		targetArn,
 		nil,
 		sv,

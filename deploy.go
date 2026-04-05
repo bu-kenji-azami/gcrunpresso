@@ -124,6 +124,10 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	}
 
 	var count *int32
+	svInput := &ecs.UpdateServiceInput{
+		Service: aws.String(d.Service),
+		Cluster: aws.String(d.Cluster),
+	}
 	if d.config.ServiceDefinitionPath != "" && opt.UpdateService {
 		newSv, err := d.LoadServiceDefinition(d.config.ServiceDefinitionPath)
 		if err != nil {
@@ -135,8 +139,9 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 			return fmt.Errorf("failed to diff of service definitions: %w", err)
 		}
 		if differ {
-			if err = d.UpdateServiceAttributes(ctx, newSv, opt); err != nil {
-				return err
+			svInput = d.BuildServiceAttributes(newSv)
+			if opt.DryRun {
+				d.LogInfo("update service input", "input", MustMarshalJSONStringForAPI(svInput))
 			}
 			sv = newSv // updated
 		} else {
@@ -165,7 +170,7 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 		return nil
 	}
 
-	if err := doDeploy(ctx, tdArn, count, sv, opt); err != nil {
+	if err := doDeploy(ctx, svInput, tdArn, count, sv, opt); err != nil {
 		return err
 	}
 
@@ -187,15 +192,17 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 	return nil
 }
 
-func (d *App) UpdateServiceTasks(ctx context.Context, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error {
-	in := &ecs.UpdateServiceInput{
-		Service:            sv.ServiceName,
-		Cluster:            aws.String(d.Cluster),
-		TaskDefinition:     aws.String(taskDefinitionArn),
-		DesiredCount:       count,
-		ForceNewDeployment: opt.ForceNewDeployment,
+func (d *App) DeployByECS(ctx context.Context, in *ecs.UpdateServiceInput, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error {
+	in.TaskDefinition = aws.String(taskDefinitionArn)
+	in.DesiredCount = count
+	in.ForceNewDeployment = opt.ForceNewDeployment
+
+	if dc := sv.DeploymentConfiguration; dc != nil {
+		d.LogInfo("deployment by ECS strategy", "strategy", string(dc.Strategy))
+	} else {
+		d.LogInfo("deployment by ECS rolling update")
 	}
-	msg := "Updating service tasks"
+	msg := "Updating service"
 	if opt.ForceNewDeployment {
 		msg = msg + " with force new deployment"
 	}
@@ -261,59 +268,36 @@ func svToUpdateServiceInput(sv *Service) *ecs.UpdateServiceInput {
 	return in
 }
 
-func (d *App) UpdateServiceAttributes(ctx context.Context, sv *Service, opt DeployOption) error {
+func (d *App) BuildServiceAttributes(sv *Service) *ecs.UpdateServiceInput {
 	in := svToUpdateServiceInput(sv)
 	if sv.isCodeDeploy() {
-		d.LogInfo("deployment by CodeDeploy")
 		// unable to update attributes below with a CODE_DEPLOY deployment controller.
 		in.NetworkConfiguration = nil
 		in.PlatformVersion = nil
 		in.LoadBalancers = nil
 		in.ServiceRegistries = nil
 		in.CapacityProviderStrategy = nil
-	} else {
-		if dc := sv.DeploymentConfiguration; dc != nil {
-			d.LogInfo("deployment by ECS strategy", "strategy", string(dc.Strategy))
-		} else {
-			d.LogInfo("deployment by ECS rolling update")
-		}
 	}
 	// Do not set TaskDefinition or ForceNewDeployment here.
-	// These are handled by UpdateServiceTasks/DeployByCodeDeploy to avoid
-	// creating duplicate ECS service deployments.
+	// These will be set by the caller (UpdateServiceTasks or Deploy for CodeDeploy).
 	in.ForceNewDeployment = false
 	in.TaskDefinition = nil
 	in.Service = aws.String(d.Service)
 	in.Cluster = aws.String(d.Cluster)
-
-	if opt.DryRun {
-		d.LogInfo("update service input", "input", MustMarshalJSONStringForAPI(in))
-		return nil
-	}
-	d.LogInfo("Updating service attributes...")
-	d.LogJSON(in)
-
-	if out, err := d.ecs.UpdateService(ctx, in); err != nil {
-		return fmt.Errorf("failed to update service attributes: %w", err)
-	} else {
-		sv.ServiceArn = out.Service.ServiceArn
-	}
-	sleepContext(ctx, delayForServiceChanged) // wait for service updated
-	return nil
+	return in
 }
 
-func (d *App) DeployByCodeDeploy(ctx context.Context, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error {
+func (d *App) DeployByCodeDeploy(ctx context.Context, in *ecs.UpdateServiceInput, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error {
+	d.LogInfo("deployment by CodeDeploy")
+	in.DesiredCount = count
+
 	if count != nil {
 		d.LogInfo("updating desired count", "desired_count", *count)
 	}
-	_, err := d.ecs.UpdateService(
-		ctx,
-		&ecs.UpdateServiceInput{
-			Service:      aws.String(d.Service),
-			Cluster:      aws.String(d.Cluster),
-			DesiredCount: count,
-		},
-	)
+	d.LogInfo("Updating service...")
+	d.LogJSON(in)
+
+	_, err := d.ecs.UpdateService(ctx, in)
 	if err != nil {
 		return fmt.Errorf("failed to update service: %w", err)
 	}
@@ -508,10 +492,10 @@ func (d *App) createDeployment(ctx context.Context, sv *Service, taskDefinitionA
 	return nil
 }
 
-type deployFunc func(ctx context.Context, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error
+type deployFunc func(ctx context.Context, in *ecs.UpdateServiceInput, taskDefinitionArn string, count *int32, sv *Service, opt DeployOption) error
 
 func (d *App) DeployFunc(sv *Service) (deployFunc, error) {
-	defaultFunc := d.UpdateServiceTasks
+	defaultFunc := d.DeployByECS
 
 	if sv == nil || sv.DeploymentController == nil {
 		return defaultFunc, nil
@@ -521,7 +505,7 @@ func (d *App) DeployFunc(sv *Service) (deployFunc, error) {
 		case types.DeploymentControllerTypeCodeDeploy:
 			return d.DeployByCodeDeploy, nil
 		case types.DeploymentControllerTypeEcs:
-			return d.UpdateServiceTasks, nil
+			return d.DeployByECS, nil
 		default:
 			return nil, fmt.Errorf("unsupported deployment controller type: %s", dc.Type)
 		}
