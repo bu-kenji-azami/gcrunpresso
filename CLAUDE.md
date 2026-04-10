@@ -100,6 +100,7 @@ go test -race ./...
 ## Documentation
 
 - When adding or changing features, always check README.md for inconsistencies and update it if needed (e.g. command examples, flag lists, log output examples)
+- When adding or modifying sections in README.md, always update the Table of Contents at the top of the file to match
 
 ## Code Style
 
