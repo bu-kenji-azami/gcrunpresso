@@ -24,7 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.10
 	github.com/aws/aws-sdk-go-v2/service/vpclattice v1.20.11
 	github.com/aws/smithy-go v1.24.2
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/fujiwara/cfn-lookup v1.1.0
 	github.com/fujiwara/ecsta v0.8.0
 	github.com/fujiwara/sloghandler v0.1.0
