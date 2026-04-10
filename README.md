@@ -33,6 +33,7 @@ ecspresso also supports ECS Express mode for simplified deployments and provides
   - [Fargate Spot support](#fargate-spot-support)
   - [ECS Service Connect support](#ecs-service-connect-support)
   - [EBS Volume support](#ebs-volume-support)
+  - [S3 Files volume support](#s3-files-volume-support)
   - [VPC Lattice support](#vpc-lattice-support)
   - [ECS Express mode support](#ecs-express-mode-support)
   - [Diff and Verify](#how-to-check-diff-and-verify-servicetask-definitions-before-deploy)
@@ -875,6 +876,35 @@ $ ecspresso run --no-ebs-delete-on-termination
 
 For tasks run by ECS services, EBS volumes are always deleted when the task stops. This is an ECS specification that ecspresso cannot override.
 
+
+### S3 Files volume support
+
+ecspresso supports [Amazon S3 Files](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html) volumes.
+
+To configure, define `mountPoints` and `volumes` with `s3filesVolumeConfiguration` in task definitions.
+
+```jsonnet
+// ecs-task-def.json
+// containerDefinitions[].mountPoints
+      "mountPoints": [
+        {
+          "containerPath": "/mnt/s3",
+          "sourceVolume": "s3files"
+        }
+      ]
+// volumes
+  "volumes": [
+    {
+      "name": "s3files",
+      "s3filesVolumeConfiguration": {
+        "fileSystemArn": "arn:aws:s3files:ap-northeast-1:123456789012:file-system/fs-01234567890abcdef",
+        "rootDirectory": "/"
+      }
+    }
+  ]
+```
+
+See [Prerequisites for S3 Files](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files-prereq-policies.html) for IAM role and security group configuration required for S3 Files mount targets.
 
 ### VPC Lattice support
 
