@@ -1,5 +1,21 @@
 # Changelog
 
+## [v2.8.1](https://github.com/kayac/ecspresso/compare/v2.8.0...v2.8.1) - 2026-04-17
+- Fix --force-new-deployment being ignored for service attribute changes by @fujiwara in https://github.com/kayac/ecspresso/pull/978
+- Bump github.com/go-jose/go-jose/v4 from 4.1.3 to 4.1.4 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/976
+- Bump aws-sdk-go-v2 and tfstate-lookup dependencies by @fujiwara in https://github.com/kayac/ecspresso/pull/986
+- Bump github.com/fatih/color from 1.18.0 to 1.19.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/970
+- Bump github.com/aws/smithy-go from 1.24.2 to 1.24.3 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/980
+- Bump actions/setup-go from 6.3.0 to 6.4.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/974
+- Bump docker/setup-qemu-action from 3.7.0 to 4.0.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/975
+- Bump docker/setup-buildx-action from 3.12.0 to 4.0.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/973
+- Bump golang.org/x/sys from 0.41.0 to 0.42.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/972
+- Bump Songmu/tagpr to v1.18.1 by @fujiwara in https://github.com/kayac/ecspresso/pull/987
+- Add S3 Files volume support documentation by @fujiwara in https://github.com/kayac/ecspresso/pull/988
+- Bump fujiwara/ecsta to v0.8.1 by @fujiwara in https://github.com/kayac/ecspresso/pull/989
+- Bump github.com/hashicorp/go-version from 1.8.0 to 1.9.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/991
+- Bump github.com/aws/aws-sdk-go-v2/service/ecs from 1.77.0 to 1.78.0 in the aws-sdk-go-v2 group by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/990
+
 ## [v2.8.0](https://github.com/kayac/ecspresso/compare/v2.7.1...v2.8.0) - 2026-03-28
 - Use structured slog attributes for log messages by @fujiwara in https://github.com/kayac/ecspresso/pull/939
 - Add docs subcommand and LLM agent skill guide by @fujiwara in https://github.com/kayac/ecspresso/pull/937
