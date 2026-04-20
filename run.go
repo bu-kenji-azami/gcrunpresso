@@ -3,6 +3,7 @@ package ecspresso
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -203,13 +204,28 @@ func (d *App) WaitRunTask(ctx context.Context, task *types.Task, watchContainer 
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
 		var nextToken *string
 		for {
 			select {
 			case <-waitCtx.Done():
 				return
 			case <-ticker.C:
-				nextToken, _ = d.GetLogEvents(waitCtx, logGroup, logStream, startedAt, nextToken)
+				token, err := d.GetLogEvents(waitCtx, logGroup, logStream, startedAt, nextToken)
+				if err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return
+					}
+					if errors.As(err, &errPermissionDenied) {
+						d.LogWarn("failed to get log events: check logs:GetLogEvents permission", "error", err.Error())
+						return
+					}
+					if !errors.As(err, &errNotFound) {
+						d.LogWarn("failed to get log events", "error", err.Error())
+					}
+					continue
+				}
+				nextToken = token
 			}
 		}
 	}()
