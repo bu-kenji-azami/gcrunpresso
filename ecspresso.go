@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/applicationautoscaling"
 	aasTypes "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	cwlTypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/codedeploy"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -514,7 +515,11 @@ func (d *App) GetLogEvents(ctx context.Context, logGroup string, logStream strin
 	ms := startedAt.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
 	out, err := d.cwl.GetLogEvents(ctx, d.GetLogEventsInput(logGroup, logStream, ms, nextToken))
 	if err != nil {
-		return nextToken, err
+		var notfound *cwlTypes.ResourceNotFoundException
+		if errors.As(err, &notfound) {
+			return nextToken, ErrNotFound(err.Error())
+		}
+		return nextToken, wrapPermissionError(err)
 	}
 	if len(out.Events) == 0 {
 		return nextToken, nil
