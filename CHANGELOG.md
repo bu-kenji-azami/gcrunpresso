@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.8.2](https://github.com/kayac/ecspresso/compare/v2.8.1...v2.8.2) - 2026-04-25
+- fix: preserve remote ServiceArn when updating service tags by @tzmfreedom in https://github.com/kayac/ecspresso/pull/996
+- Improve error handling for GetLogEvents in run-task by @ken39arg in https://github.com/kayac/ecspresso/pull/992
+- Bump github.com/mattn/go-shellwords from 1.0.12 to 1.0.13 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/995
+- Bump github.com/aws/smithy-go from 1.24.3 to 1.25.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/994
+- Bump the aws-sdk-go-v2 group with 17 updates by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/993
+
 ## [v2.8.1](https://github.com/kayac/ecspresso/compare/v2.8.0...v2.8.1) - 2026-04-17
 - Fix --force-new-deployment being ignored for service attribute changes by @fujiwara in https://github.com/kayac/ecspresso/pull/978
 - Bump github.com/go-jose/go-jose/v4 from 4.1.3 to 4.1.4 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/976
