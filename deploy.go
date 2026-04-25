@@ -143,7 +143,9 @@ func (d *App) Deploy(ctx context.Context, opt DeployOption) error {
 			if opt.DryRun {
 				d.LogInfo("update service input", "input", MustMarshalJSONStringForAPI(svInput))
 			}
+			remoteServiceArn := sv.ServiceArn
 			sv = newSv // updated
+			sv.ServiceArn = remoteServiceArn
 		} else {
 			d.LogInfo("service attributes will not change")
 		}
