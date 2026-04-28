@@ -26,7 +26,7 @@ require (
 	github.com/aws/smithy-go v1.25.1
 	github.com/fatih/color v1.19.0
 	github.com/fujiwara/cfn-lookup v1.1.0
-	github.com/fujiwara/ecsta v0.8.1
+	github.com/fujiwara/ecsta v0.8.2
 	github.com/fujiwara/sloghandler v0.1.0
 	github.com/fujiwara/ssm-lookup v0.1.1
 	github.com/fujiwara/tfstate-lookup v1.11.0
