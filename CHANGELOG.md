@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.8.3](https://github.com/kayac/ecspresso/compare/v2.8.2...v2.8.3) - 2026-04-28
+- fix: handle unexpected response from /releases API in install script by @ppluuums-jp in https://github.com/kayac/ecspresso/pull/1002
+- fix: surface non-2xx errors from /releases API in install script by @fujiwara in https://github.com/kayac/ecspresso/pull/1005
+- docs: note v2-action-testing branch for action.yml CI by @fujiwara in https://github.com/kayac/ecspresso/pull/1006
+- Bump github.com/aws/smithy-go from 1.25.0 to 1.25.1 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/999
+- Bump fujiwara/ecsta to v0.8.2 (fix #1000) by @fujiwara in https://github.com/kayac/ecspresso/pull/1003
+- Bump the aws-sdk-go-v2 group with 4 updates by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/998
+
 ## [v2.8.2](https://github.com/kayac/ecspresso/compare/v2.8.1...v2.8.2) - 2026-04-25
 - fix: preserve remote ServiceArn when updating service tags by @tzmfreedom in https://github.com/kayac/ecspresso/pull/996
 - Improve error handling for GetLogEvents in run-task by @ken39arg in https://github.com/kayac/ecspresso/pull/992
