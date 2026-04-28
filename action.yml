@@ -45,7 +45,7 @@ runs:
         fi
         if [ "${VERSION}" = "latest" ]; then
           DOWNLOAD_URL=$(curl "${api_request_args[@]}" https://api.github.com/repos/kayac/ecspresso/releases \
-            | jq --arg matcher "linux.${GOARCH}." -r '[.[]?|select(.tag_name? > "v2.0")|select(.prerelease==false)][0].assets[]?.browser_download_url|select(match($matcher))')
+            | jq --arg matcher "linux.${GOARCH}." -r '[.[]?|select(.tag_name? > "v2.0")|select(.draft==false)|select(.prerelease==false)][0].assets[]?.browser_download_url|select(match($matcher))')
           if [ -z "${DOWNLOAD_URL}" ]; then
             echo "No matching release asset found for linux/${GOARCH}"
             exit 1
