@@ -10,6 +10,7 @@ ecspresso is a deployment tool for Amazon ECS written in Go. It manages ECS serv
 
 - Default branch: `v2`
 - Do not commit directly to `v2`. Always create a feature branch first.
+- When changing `action.yml`, force-push the same commit to the `v2-action-testing` branch as well. CI for the GitHub Action runs against that branch, so pushing there is how `action.yml` changes get exercised end-to-end.
 
 ## Build Commands
 
