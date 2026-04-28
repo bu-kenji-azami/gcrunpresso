@@ -1147,7 +1147,7 @@ Consider using ecsta as a CLI command.
 
 #### tasks
 
-The `tasks` command lists tasks run by a service or having the same family to a task definition.
+The `tasks` command lists tasks related to the ecspresso configuration. When `service` is configured, it lists tasks belonging to the service plus standalone tasks of the same family (typically launched by `ecspresso run`). Tasks of other services that share the task definition family are excluded. When `service` is not configured, it lists tasks of the task definition family.
 
 ```
 Usage: ecspresso tasks <command> [flags]

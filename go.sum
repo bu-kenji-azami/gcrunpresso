@@ -188,8 +188,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fujiwara/cfn-lookup v1.1.0 h1:wNjMituD/n8XAhBw+L3uqtDCnWr1nrAI7T/YATMwl9A=
 github.com/fujiwara/cfn-lookup v1.1.0/go.mod h1:yQiC+G7sSTRTic6E8RKv1G36tp+y2Q/9BT6QMQT4yyw=
-github.com/fujiwara/ecsta v0.8.1 h1:PsTM5Gnz/xBzJy5bJvlPOXbol/fItmA0ymDn+PVu69c=
-github.com/fujiwara/ecsta v0.8.1/go.mod h1:tSPr0SJhaB2gUbXlN6CAU8UVxFlp6tkSXPtp37hhdes=
+github.com/fujiwara/ecsta v0.8.2 h1:A4+7PYEv8pG6dbhucnOQDKwNi5OXNMtZYMNGFhSbZGc=
+github.com/fujiwara/ecsta v0.8.2/go.mod h1:tSPr0SJhaB2gUbXlN6CAU8UVxFlp6tkSXPtp37hhdes=
 github.com/fujiwara/sloghandler v0.1.0 h1:4uxE5z01fKv/qzUoIyYk/2H1D4xEb/wi2K/Wks9z5Tg=
 github.com/fujiwara/sloghandler v0.1.0/go.mod h1:9wl7zZ1fO53Gl83/M8KFYW+5iACiwXAltOL5REOUd24=
 github.com/fujiwara/ssm-lookup v0.1.1 h1:Cwx7Y6A0HbIKyAzS60DYcf/TZ5KZHY/vTlCtUoythfQ=
