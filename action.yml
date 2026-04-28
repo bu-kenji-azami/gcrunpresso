@@ -21,7 +21,7 @@ runs:
       env:
         github_token: ${{ inputs.github-token }}
       run: |
-        set -e
+        set -eo pipefail
         ARCH=$(uname -m)
         if [ "${ARCH}" = "x86_64" ]; then
           GOARCH="amd64"
@@ -39,7 +39,7 @@ runs:
 
         echo "VERSION=${VERSION} GOARCH=${GOARCH}"
 
-        api_request_args=("-sS")
+        api_request_args=("-sS" "--fail-with-body")
         if [[ -n "$github_token" ]]; then
           api_request_args=("${api_request_args[@]}" -H "authorization: token $github_token")
         fi
@@ -47,7 +47,7 @@ runs:
           DOWNLOAD_URL=$(curl "${api_request_args[@]}" https://api.github.com/repos/kayac/ecspresso/releases \
             | jq --arg matcher "linux.${GOARCH}." -r '[.[]?|select(.tag_name? > "v2.0")|select(.prerelease==false)][0].assets[]?.browser_download_url|select(match($matcher))')
           if [ -z "${DOWNLOAD_URL}" ]; then
-            echo "Unexpected response from /releases API"
+            echo "No matching release asset found for linux/${GOARCH}"
             exit 1
           fi
         else
