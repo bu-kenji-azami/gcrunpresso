@@ -101,17 +101,20 @@ func setupPluginTFState(ctx context.Context, p ConfigPlugin, c *Config) error {
 		return errors.New("tfstate plugin requires path or url for tfstate location")
 	}
 
-	lookup, err := tfstate.ReadURL(ctx, loc)
+	state, err := tfstate.ReadURL(ctx, loc)
 	if err != nil {
 		return err
 	}
-	if err := p.AppendFuncMap(c, lookup.FuncMap(ctx)); err != nil {
+	c.pluginInstances = append(c.pluginInstances, pluginInstance{
+		name:       "tfstate",
+		funcPrefix: p.FuncPrefix,
+		value:      state,
+	})
+
+	if err := p.AppendFuncMap(c, state.FuncMap(ctx)); err != nil {
 		return err
 	}
-	if err := p.AppendJsonnetNativeFuncs(c, lookup.JsonnetNativeFuncs(ctx)); err != nil {
-		return err
-	}
-	return nil
+	return p.AppendJsonnetNativeFuncs(c, state.JsonnetNativeFuncs(ctx))
 }
 
 func setupPluginCFn(ctx context.Context, p ConfigPlugin, c *Config) error {

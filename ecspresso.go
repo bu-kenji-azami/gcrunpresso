@@ -256,6 +256,24 @@ func (d *App) Config() *Config {
 	return d.config
 }
 
+// PluginInstance returns the runtime instance produced by the named
+// plugin during Setup, identified by funcPrefix (pass "" for the
+// default prefix). The concrete type depends on the plugin: for example
+// the "tfstate" plugin returns *tfstate.TFState, which callers can
+// type-assert to call SetOverrides on. Returns nil if no matching
+// plugin is configured.
+func (d *App) PluginInstance(name, funcPrefix string) any {
+	if d.config == nil {
+		return nil
+	}
+	for _, inst := range d.config.pluginInstances {
+		if inst.name == name && inst.funcPrefix == funcPrefix {
+			return inst.value
+		}
+	}
+	return nil
+}
+
 func (d *App) Timeout() time.Duration {
 	return d.config.Timeout.Duration
 }
