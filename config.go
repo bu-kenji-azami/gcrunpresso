@@ -71,6 +71,20 @@ type Config struct {
 	dir                string
 	versionConstraints goVersion.Constraints
 	awsv2Config        aws.Config
+
+	// pluginInstances records the runtime instance each plugin's Setup
+	// produces, when the plugin has something callers may want to access
+	// after setup. Currently only the tfstate plugin uses this (storing
+	// its *tfstate.TFState so callers can inject overrides via
+	// App.TFState). Other plugins resolve at template-render time and
+	// register nothing here.
+	pluginInstances []pluginInstance
+}
+
+type pluginInstance struct {
+	name       string
+	funcPrefix string
+	value      any
 }
 
 type ConfigCodeDeploy struct {
