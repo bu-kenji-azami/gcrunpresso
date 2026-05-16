@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.8.4](https://github.com/kayac/ecspresso/compare/v2.8.3...v2.8.4) - 2026-05-16
+- fix: skip draft releases when resolving latest in install script by @fujiwara in https://github.com/kayac/ecspresso/pull/1007
+- Expose plugin runtime instances via App.PluginInstance by @fujiwara in https://github.com/kayac/ecspresso/pull/1015
+- Bump dependencies by @fujiwara in https://github.com/kayac/ecspresso/pull/1016
+
 ## [v2.8.3](https://github.com/kayac/ecspresso/compare/v2.8.2...v2.8.3) - 2026-04-28
 - fix: handle unexpected response from /releases API in install script by @ppluuums-jp in https://github.com/kayac/ecspresso/pull/1002
 - fix: surface non-2xx errors from /releases API in install script by @fujiwara in https://github.com/kayac/ecspresso/pull/1005
