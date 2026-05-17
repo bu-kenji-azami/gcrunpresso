@@ -101,9 +101,22 @@ func setupPluginTFState(ctx context.Context, p ConfigPlugin, c *Config) error {
 		return errors.New("tfstate plugin requires path or url for tfstate location")
 	}
 
+	var optional bool
+	if v, exists := p.Config["optional"]; exists {
+		b, ok := v.(bool)
+		if !ok {
+			return fmt.Errorf("tfstate plugin: optional must be a bool, got %T", v)
+		}
+		optional = b
+	}
 	state, err := tfstate.ReadURL(ctx, loc)
 	if err != nil {
-		return err
+		if !optional {
+			return err
+		}
+		LogWarn("tfstate plugin: failed to read tfstate, continuing with empty state because optional=true",
+			"location", loc, "error", err.Error())
+		state = tfstate.Empty()
 	}
 	c.pluginInstances = append(c.pluginInstances, pluginInstance{
 		name:       "tfstate",
