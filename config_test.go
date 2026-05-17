@@ -406,3 +406,36 @@ func TestConfigIgnore(t *testing.T) {
 		})
 	}
 }
+
+// When the tfstate plugin has optional=true and the configured path/url
+// cannot be read, ecspresso must continue with an empty state instead of
+// failing config load.
+func TestLoadConfigWithTFStatePluginOptional(t *testing.T) {
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	ctx := t.Context()
+	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
+		ConfigFilePath: "tests/config_tfstate_optional.yaml",
+	})
+	if err != nil {
+		t.Fatalf("expected New to succeed with optional tfstate plugin, got: %s", err)
+	}
+	if app == nil {
+		t.Fatal("app is nil")
+	}
+}
+
+// optional must be a bool. Other types (e.g. the string "true") are
+// rejected so users do not silently get the empty-state fallback by typo.
+func TestLoadConfigWithTFStatePluginOptionalInvalidType(t *testing.T) {
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	ctx := t.Context()
+	_, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
+		ConfigFilePath: "tests/config_tfstate_optional_invalid.yaml",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-bool optional, got nil")
+	}
+	if !strings.Contains(err.Error(), "optional must be a bool") {
+		t.Errorf("unexpected error message: %s", err)
+	}
+}
