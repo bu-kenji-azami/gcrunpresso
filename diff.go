@@ -35,7 +35,31 @@ type DiffOption struct {
 	w io.Writer `kong:"-"`
 }
 
+// Diff renders the diff between local definitions and the deployed
+// service / task definition to opt.w (or stdout when nil). It is the
+// CLI dispatch entry and keeps the (ctx, opt) error signature shared
+// with the other dispatched commands.
 func (d *App) Diff(ctx context.Context, opt DiffOption) error {
+	_, err := d.diff(ctx, opt)
+	return err
+}
+
+// HasDiff reports whether there is any difference between local
+// definitions and what is currently deployed, without writing the
+// diff output anywhere. Intended for library callers that want to
+// branch on "is there anything to deploy" — e.g. terraform-provider-
+// ecspresso skipping `ecspresso deploy` when the rendered configs
+// already match AWS.
+func (d *App) HasDiff(ctx context.Context, opt DiffOption) (bool, error) {
+	opt.w = io.Discard
+	return d.diff(ctx, opt)
+}
+
+// diff is the shared implementation behind Diff and HasDiff. The
+// bool return is true when either the service definition or the
+// task definition differs from what is currently deployed (which
+// includes the "remote not found, will be created" case).
+func (d *App) diff(ctx context.Context, opt DiffOption) (bool, error) {
 	ctx, cancel := d.Start(ctx)
 	defer cancel()
 	if opt.w == nil {
@@ -44,32 +68,36 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 
 	// express gateway service
 	if d.config.isExpressMode() {
-		return d.DiffExpress(ctx, opt)
+		return d.diffExpress(ctx, opt)
 	}
 
-	var remoteTaskDefArn string
+	var (
+		remoteTaskDefArn string
+		svChanged        bool
+	)
 	// diff for services only when service defined and not skipped
 	if d.config.Service != "" && opt.WithService {
 		d.LogDebug("diff service compare with %s", d.config.Service)
 		newSv, err := d.LoadServiceDefinition(d.config.ServiceDefinitionPath)
 		if err != nil {
-			return fmt.Errorf("failed to load service definition: %w", err)
+			return false, fmt.Errorf("failed to load service definition: %w", err)
 		}
 		remoteSv, err := d.DescribeService(ctx)
 		if err != nil {
 			if errors.As(err, &errNotFound) {
 				d.LogInfo("service not found, will create a new service")
 			} else {
-				return fmt.Errorf("failed to describe service: %w", err)
+				return false, fmt.Errorf("failed to describe service: %w", err)
 			}
 		}
-		if _, err := diffServices(ctx, newSv, remoteSv, d.config.ServiceDefinitionPath, &opt); err != nil {
-			return err
+		svChanged, err = diffServices(ctx, newSv, remoteSv, d.config.ServiceDefinitionPath, &opt)
+		if err != nil {
+			return false, err
 		}
 		if remoteSv != nil {
 			remoteTaskDefArn, err = remoteSv.getTaskDefinitionArn()
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
@@ -77,7 +105,7 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 	// task definition
 	newTd, err := d.LoadTaskDefinition(d.config.TaskDefinitionPath)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if remoteTaskDefArn == "" {
 		arn, err := d.findLatestTaskDefinitionArn(ctx, *newTd.Family)
@@ -85,7 +113,7 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 			if errors.As(err, &errNotFound) {
 				d.LogInfo("task definition not found, will register a new task definition")
 			} else {
-				return err
+				return false, err
 			}
 		}
 		remoteTaskDefArn = arn
@@ -95,39 +123,43 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 		d.LogDebug("diff task definition compare with %s", remoteTaskDefArn)
 		remoteTd, err = d.DescribeTaskDefinition(ctx, remoteTaskDefArn)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	if _, err := diffTaskDefs(ctx, newTd, remoteTd, d.config.TaskDefinitionPath, remoteTaskDefArn, &opt); err != nil {
-		return err
+	tdChanged, err := diffTaskDefs(ctx, newTd, remoteTd, d.config.TaskDefinitionPath, remoteTaskDefArn, &opt)
+	if err != nil {
+		return false, err
 	}
 
-	return nil
+	return svChanged || tdChanged, nil
 }
 
+// DiffExpress is the dispatch entry for the express-mode diff.
 func (d *App) DiffExpress(ctx context.Context, opt DiffOption) error {
+	_, err := d.diffExpress(ctx, opt)
+	return err
+}
+
+func (d *App) diffExpress(ctx context.Context, opt DiffOption) (bool, error) {
 	d.LogDebug("diff express gateway service compare with %s", d.config.ExpressDefinitionPath)
 	sv, err := d.DescribeService(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	newEx, err := d.LoadExpressDefinition(d.config.ExpressDefinitionPath)
 	if err != nil {
-		return fmt.Errorf("failed to load express gateway service definition: %w", err)
+		return false, fmt.Errorf("failed to load express gateway service definition: %w", err)
 	}
 	remoteEx, err := d.DescribeExpressGatewayService(ctx, sv)
 	if err != nil {
 		if errors.As(err, &errNotFound) {
 			d.LogInfo("express gateway service not found, will create a new express gateway service")
 		} else {
-			return fmt.Errorf("failed to describe express gateway service: %w", err)
+			return false, fmt.Errorf("failed to describe express gateway service: %w", err)
 		}
 	}
-	if _, err := diffExpressGatewayServices(ctx, newEx, remoteEx, d.config.ExpressDefinitionPath, &opt); err != nil {
-		return err
-	}
-	return nil
+	return diffExpressGatewayServices(ctx, newEx, remoteEx, d.config.ExpressDefinitionPath, &opt)
 }
 
 type ServiceForDiff struct {
