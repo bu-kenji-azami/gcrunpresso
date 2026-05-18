@@ -9,10 +9,7 @@ import (
 	"github.com/kayac/ecspresso/v2"
 )
 
-var Version string
-
 func main() {
-	ecspresso.Version = Version
 	ctx, stop := signal.NotifyContext(context.Background(), trapSignals...)
 	defer stop()
 
