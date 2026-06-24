@@ -61,6 +61,7 @@ type Service struct {
 	ServiceConnectConfiguration *types.ServiceConnectConfiguration
 	VolumeConfigurations        []types.ServiceVolumeConfiguration
 	VpcLatticeConfigurations    []types.VpcLatticeConfiguration
+	Monitoring                  *types.MonitoringConfiguration
 	DesiredCount                *int32
 }
 
@@ -131,6 +132,23 @@ func (d *App) newServiceFromTypes(ctx context.Context, in types.Service) (*Servi
 	if dp.VpcLatticeConfigurations != nil {
 		d.LogDebug("VpcLatticeConfigurations: %#v", dp.VpcLatticeConfigurations)
 		sv.VpcLatticeConfigurations = dp.VpcLatticeConfigurations
+	}
+
+	// Monitoring is not available on Deployment or types.Service.
+	// It only exists on ServiceRevision, so we need to call DescribeServiceRevisions.
+	if len(in.CurrentServiceRevisions) > 0 {
+		revArn := aws.ToString(in.CurrentServiceRevisions[0].Arn)
+		if revArn != "" {
+			revOut, err := d.ecs.DescribeServiceRevisions(ctx, &ecs.DescribeServiceRevisionsInput{
+				ServiceRevisionArns: []string{revArn},
+			})
+			if err != nil {
+				d.LogWarn("failed to describe service revision, skipping monitoring configuration: %s", err)
+			} else if len(revOut.ServiceRevisions) > 0 && revOut.ServiceRevisions[0].Monitoring != nil {
+				d.LogDebug("Monitoring: %#v", revOut.ServiceRevisions[0].Monitoring)
+				sv.Monitoring = revOut.ServiceRevisions[0].Monitoring
+			}
+		}
 	}
 
 	// Fill taskDefinition if not set
