@@ -1,5 +1,17 @@
 # Changelog
 
+## [v2.8.5](https://github.com/kayac/ecspresso/compare/v2.8.4...v2.8.5) - 2026-07-07
+- Add `optional: true` to tfstate plugin by @fujiwara in https://github.com/kayac/ecspresso/pull/1017
+- Add App.HasDiff for library callers by @fujiwara in https://github.com/kayac/ecspresso/pull/1019
+- Embed Version in source via tagpr versionFile by @fujiwara in https://github.com/kayac/ecspresso/pull/1022
+- Bump github.com/fujiwara/tfstate-lookup from 1.12.0 to 1.12.1 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/1021
+- Bump aws-sdk-go-v2 modules (ecs, cloudwatchlogs, s3, vpclattice) by @fujiwara in https://github.com/kayac/ecspresso/pull/1030
+- Fix error handling in CircleCI orb install command by @mi-wada in https://github.com/kayac/ecspresso/pull/1043
+- Support monitoring configuration for high resolution CloudWatch metrics by @fujiwara in https://github.com/kayac/ecspresso/pull/1045
+- Bump golang.org/x/net from 0.53.0 to 0.55.0 by @dependabot[bot] in https://github.com/kayac/ecspresso/pull/1050
+- Fix verify 404 for images pinned as repo:tag@sha256:digest by @fujiwara in https://github.com/kayac/ecspresso/pull/1054
+- Fix panic in verify for PAUSE lifecycle hooks by @fujiwara in https://github.com/kayac/ecspresso/pull/1055
+
 ## [v2.8.4](https://github.com/kayac/ecspresso/compare/v2.8.3...v2.8.4) - 2026-05-16
 - fix: skip draft releases when resolving latest in install script by @fujiwara in https://github.com/kayac/ecspresso/pull/1007
 - Expose plugin runtime instances via App.PluginInstance by @fujiwara in https://github.com/kayac/ecspresso/pull/1015
