@@ -79,3 +79,11 @@ func (i *ConfigIgnore) FilterTags(tags []types.Tag) []types.Tag {
 func SleepContext(ctx context.Context, d time.Duration) {
 	sleepContext(ctx, d)
 }
+
+func (d *App) VerifyDeploymentConfiguration(ctx context.Context, dc *types.DeploymentConfiguration) error {
+	return d.verifyDeploymentConfiguration(ctx, dc)
+}
+
+func ContextWithVerifyState(ctx context.Context, vs *verifyState) context.Context {
+	return context.WithValue(ctx, verifyStateKey, vs)
+}
