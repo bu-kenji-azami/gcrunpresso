@@ -35,6 +35,9 @@ var (
 	ParseIAMPolicyDocument = parseIAMPolicyDocument
 	ParseSections          = parseSections
 	ReadmeContent          = readmeContent
+
+	LifecycleStageIndex             = lifecycleStageIndex
+	ValidateLifecycleStageSupported = validateLifecycleStageSupported
 )
 
 type ModifyAutoScalingParams = modifyAutoScalingParams
