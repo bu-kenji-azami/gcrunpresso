@@ -8,18 +8,33 @@ import (
 )
 
 func TestLifecycleStageIndex(t *testing.T) {
-	// The waiter compares positions instead of equality, so the ordering of the
-	// stages within the deployment lifecycle is what matters.
-	stages := types.ServiceDeploymentLifecycleStage("").Values()
-	for i, stage := range stages {
+	// The waiter compares positions instead of equality, so pin the full
+	// ordering of the stages within the deployment lifecycle.
+	expected := []types.ServiceDeploymentLifecycleStage{
+		"RECONCILE_SERVICE",
+		"PRE_SCALE_UP",
+		"SCALE_UP",
+		"POST_SCALE_UP",
+		"TEST_TRAFFIC_SHIFT",
+		"POST_TEST_TRAFFIC_SHIFT",
+		"PRODUCTION_TRAFFIC_SHIFT",
+		"POST_PRODUCTION_TRAFFIC_SHIFT",
+		"BAKE_TIME",
+		"CLEAN_UP",
+	}
+	for i, stage := range expected {
 		if got := ecspresso.LifecycleStageIndex(stage); got != i {
 			t.Errorf("lifecycleStageIndex(%s) = %d, expected %d", stage, got, i)
 		}
 	}
 
-	if scaleUp, bakeTime := ecspresso.LifecycleStageIndex(types.ServiceDeploymentLifecycleStageScaleUp),
-		ecspresso.LifecycleStageIndex(types.ServiceDeploymentLifecycleStageBakeTime); scaleUp >= bakeTime {
-		t.Errorf("SCALE_UP (%d) must come before BAKE_TIME (%d)", scaleUp, bakeTime)
+	// Every stage known to the SDK must have a position, so that an SDK update
+	// introducing a new stage fails this test instead of silently indexing to
+	// -1 (which never satisfies a target).
+	for _, stage := range types.ServiceDeploymentLifecycleStage("").Values() {
+		if got := ecspresso.LifecycleStageIndex(stage); got < 0 {
+			t.Errorf("lifecycleStageIndex(%s) = %d; add the new stage to lifecycleStages in its lifecycle position", stage, got)
+		}
 	}
 
 	// A rolling deployment reports no lifecycle stage, which must never satisfy
@@ -95,5 +110,121 @@ func TestWaitFuncForECSLifecycleStage(t *testing.T) {
 	}
 	if _, err := app.WaitFunc(cd, nil, "ecs:BAKE_TIME"); err == nil {
 		t.Error("ecs:* should not be accepted for the CodeDeploy deployment controller")
+	}
+
+	// ECS is the default deployment controller: a service without an explicit
+	// one must not fall back to the service-stable waiter silently.
+	noController := &ecspresso.Service{Service: types.Service{}}
+	doWait, err := app.WaitFunc(noController, nil, "ecs:BAKE_TIME")
+	if err != nil {
+		t.Errorf("ecs:BAKE_TIME should be supported without an explicit deployment controller, got %v", err)
+	}
+	// The returned waiter must reject a rolling service before polling AWS.
+	rolling := &ecspresso.Service{
+		Service: types.Service{
+			DeploymentConfiguration: &types.DeploymentConfiguration{
+				Strategy: types.DeploymentStrategyRolling,
+			},
+		},
+	}
+	if err := doWait(t.Context(), rolling); err == nil {
+		t.Error("waiting for a lifecycle stage on a ROLLING service should fail")
+	}
+}
+
+func TestWaitServiceDeployLifecycleStageUnknownStage(t *testing.T) {
+	app := &ecspresso.App{}
+	sv := &ecspresso.Service{
+		Service: types.Service{
+			DeploymentConfiguration: &types.DeploymentConfiguration{
+				Strategy: types.DeploymentStrategyBlueGreen,
+			},
+		},
+	}
+	// An unknown stage would index to -1 and be satisfied immediately, so the
+	// waiter must reject it before polling anything.
+	for _, stage := range []types.ServiceDeploymentLifecycleStage{"", "NO_SUCH_STAGE"} {
+		if err := app.WaitServiceDeployLifecycleStage(stage)(t.Context(), sv); err == nil {
+			t.Errorf("unknown lifecycle stage %q should be rejected", stage)
+		}
+	}
+}
+
+func TestEvaluateDeploymentStatus(t *testing.T) {
+	reached := func(dp *types.ServiceDeployment) bool {
+		return ecspresso.LifecycleStageIndex(dp.LifecycleStage) >= ecspresso.LifecycleStageIndex(types.ServiceDeploymentLifecycleStageBakeTime)
+	}
+	tests := []struct {
+		name    string
+		dp      types.ServiceDeployment
+		done    func(*types.ServiceDeployment) bool
+		want    ecspresso.WaitDeploymentResult
+		wantErr bool
+	}{
+		{
+			name: "successful",
+			dp:   types.ServiceDeployment{Status: types.ServiceDeploymentStatusSuccessful},
+			want: ecspresso.WaitDeploymentCompleted,
+		},
+		{
+			name: "rollback is completed when waiting for the deployment",
+			dp:   types.ServiceDeployment{Status: types.ServiceDeploymentStatusRollbackSuccessful},
+			want: ecspresso.WaitDeploymentCompleted,
+		},
+		{
+			name:    "rollback fails when waiting for a lifecycle stage",
+			dp:      types.ServiceDeployment{Status: types.ServiceDeploymentStatusRollbackSuccessful},
+			done:    reached,
+			wantErr: true,
+		},
+		{
+			name:    "stopped",
+			dp:      types.ServiceDeployment{Status: types.ServiceDeploymentStatusStopped},
+			wantErr: true,
+		},
+		{
+			name: "in progress before the target stage",
+			dp: types.ServiceDeployment{
+				Status:         types.ServiceDeploymentStatusInProgress,
+				LifecycleStage: types.ServiceDeploymentLifecycleStageScaleUp,
+			},
+			done: reached,
+			want: ecspresso.WaitDeploymentContinue,
+		},
+		{
+			name: "in progress at the target stage",
+			dp: types.ServiceDeployment{
+				Status:         types.ServiceDeploymentStatusInProgress,
+				LifecycleStage: types.ServiceDeploymentLifecycleStageBakeTime,
+			},
+			done: reached,
+			want: ecspresso.WaitDeploymentReachedStage,
+		},
+		{
+			name: "the stage during a rollback does not satisfy the target",
+			dp: types.ServiceDeployment{
+				Status:         types.ServiceDeploymentStatusRollbackInProgress,
+				LifecycleStage: types.ServiceDeploymentLifecycleStageBakeTime,
+			},
+			done: reached,
+			want: ecspresso.WaitDeploymentContinue,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ecspresso.EvaluateDeploymentStatus(&tt.dp, tt.done)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("evaluateDeploymentStatus = %v, expected %v", got, tt.want)
+			}
+		})
 	}
 }
