@@ -317,12 +317,42 @@ func (d *App) WaitServiceDeployLifecycleStage(stage types.ServiceDeploymentLifec
 		}
 		d.LogInfo("Waiting for service deployment lifecycle stage...", "stage", string(stage))
 		target := lifecycleStageIndex(stage)
+		notified := map[string]struct{}{}
 		// Stages such as PRODUCTION_TRAFFIC_SHIFT are transient and can be
 		// skipped between polls, so compare positions rather than equality.
 		return d.waitServiceDeployment(ctx, func(dp *types.ServiceDeployment) bool {
-			return lifecycleStageIndex(dp.LifecycleStage) >= target
+			if lifecycleStageIndex(dp.LifecycleStage) >= target {
+				return true
+			}
+			// A pause lifecycle hook awaiting action blocks the deployment, so
+			// the target stage never arrives until the deployment is continued.
+			for _, id := range pausedHookIDs(dp) {
+				if _, ok := notified[id]; ok {
+					continue
+				}
+				notified[id] = struct{}{}
+				d.LogWarn("deployment is paused at a lifecycle hook; the target lifecycle stage will not be reached until the deployment is continued (e.g., by `aws ecs continue-service-deployment`)",
+					"hook_id", id,
+					"lifecycle_stage", string(dp.LifecycleStage),
+					"target_stage", string(stage),
+				)
+			}
+			return false
 		})
 	}
+}
+
+// pausedHookIDs returns the IDs of pause lifecycle hooks of the deployment
+// that are awaiting action.
+func pausedHookIDs(dp *types.ServiceDeployment) []string {
+	var ids []string
+	for _, hook := range dp.LifecycleHookDetails {
+		if hook.TargetType == types.DeploymentLifecycleHookTargetTypePause &&
+			hook.Status == types.DeploymentLifecycleHookStatusAwaitingAction {
+			ids = append(ids, aws.ToString(hook.HookId))
+		}
+	}
+	return ids
 }
 
 // validateLifecycleStageSupported rejects a lifecycle stage target on a service
