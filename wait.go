@@ -70,9 +70,13 @@ func (u waitUntil) ecsLifecycleStage() string {
 }
 
 // lifecycleStages are the deployment lifecycle stages in the order they occur
-// during a deployment. The waiter compares stage positions, so this must not
-// be derived from types.ServiceDeploymentLifecycleStage.Values(), whose
-// ordering is documented as not guaranteed to be stable across SDK updates.
+// during a deployment, as documented in "Deployment lifecycle stages" at
+// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/blue-green-deployment-how-it-works.html#blue-green-deployment-stages
+// The waiter compares stage positions, so this must not be derived from
+// types.ServiceDeploymentLifecycleStage.Values(), whose ordering is documented
+// as not guaranteed to be stable across SDK updates. When the SDK introduces a
+// new stage (TestLifecycleStageIndex fails), insert it here at the position
+// the document above describes.
 var lifecycleStages = []types.ServiceDeploymentLifecycleStage{
 	types.ServiceDeploymentLifecycleStageReconcileService,
 	types.ServiceDeploymentLifecycleStagePreScaleUp,
