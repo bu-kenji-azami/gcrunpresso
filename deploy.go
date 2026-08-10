@@ -31,7 +31,7 @@ type DeployOption struct {
 	Revision             int64  `help:"revision of the task definition to run when --skip-task-definition" default:"0"`
 	ForceNewDeployment   bool   `help:"force a new deployment of the service" default:"false"`
 	Wait                 bool   `help:"wait for service stable" default:"true" negatable:""`
-	WaitUntil            string `help:"Choose whether to wait for service stable or the deployment finishes. For ECS deployment controller: \"(stable|deployed)\"; For CodeDeploy deployment controller: \"codedeploy:*\", this accepts CodeDeploy lifecycle event (e.g., \"codedeploy:AfterAllowTraffic\")" default:"deployed"`
+	WaitUntil            string `help:"Choose whether to wait for service stable or the deployment finishes. For ECS deployment controller: \"(stable|deployed)\", or \"ecs:*\", this accepts a deployment lifecycle stage (e.g., \"ecs:BAKE_TIME\"); For CodeDeploy deployment controller: \"codedeploy:*\", this accepts CodeDeploy lifecycle event (e.g., \"codedeploy:AfterAllowTraffic\")" default:"deployed"`
 	SuspendAutoScaling   *bool  `help:"suspend application auto-scaling attached with the ECS service"`
 	ResumeAutoScaling    *bool  `help:"resume application auto-scaling attached with the ECS service"`
 	AutoScalingMin       *int32 `help:"set minimum capacity of application auto-scaling attached with the ECS service"`

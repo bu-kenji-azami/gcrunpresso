@@ -428,9 +428,10 @@ Events:
   --force-new-deployment                 force a new deployment of the service
   --[no-]wait                            wait for service stable
   --wait-until="deployed"                Choose whether to wait for service stable or the deployment finishes. For
-                                         ECS deployment controller: "(stable|deployed)"; For CodeDeploy deployment
-                                         controller: "codedeploy:*", this accepts CodeDeploy lifecycle event (e.g.,
-                                         "codedeploy:AfterAllowTraffic")
+                                         ECS deployment controller: "(stable|deployed)", or "ecs:*", this accepts a
+                                         deployment lifecycle stage (e.g., "ecs:BAKE_TIME"); For CodeDeploy
+                                         deployment controller: "codedeploy:*", this accepts CodeDeploy lifecycle
+                                         event (e.g., "codedeploy:AfterAllowTraffic")
   --suspend-auto-scaling                 suspend application auto-scaling attached with the ECS service
   --resume-auto-scaling                  resume application auto-scaling attached with the ECS service
   --auto-scaling-min=AUTO-SCALING-MIN    set minimum capacity of application auto-scaling attached with the ECS service
