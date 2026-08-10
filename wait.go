@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -68,21 +69,33 @@ func (u waitUntil) ecsLifecycleStage() string {
 	return ""
 }
 
+// lifecycleStages are the deployment lifecycle stages in the order they occur
+// during a deployment. The waiter compares stage positions, so this must not
+// be derived from types.ServiceDeploymentLifecycleStage.Values(), whose
+// ordering is documented as not guaranteed to be stable across SDK updates.
+var lifecycleStages = []types.ServiceDeploymentLifecycleStage{
+	types.ServiceDeploymentLifecycleStageReconcileService,
+	types.ServiceDeploymentLifecycleStagePreScaleUp,
+	types.ServiceDeploymentLifecycleStageScaleUp,
+	types.ServiceDeploymentLifecycleStagePostScaleUp,
+	types.ServiceDeploymentLifecycleStageTestTrafficShift,
+	types.ServiceDeploymentLifecycleStagePostTestTrafficShift,
+	types.ServiceDeploymentLifecycleStageProductionTrafficShift,
+	types.ServiceDeploymentLifecycleStagePostProductionTrafficShift,
+	types.ServiceDeploymentLifecycleStageBakeTime,
+	types.ServiceDeploymentLifecycleStageCleanUp,
+}
+
 // lifecycleStageIndex returns the position of the stage in the deployment
 // lifecycle, or -1 when the stage is unknown (including an empty stage, which
 // is what a rolling deployment reports).
 func lifecycleStageIndex(stage types.ServiceDeploymentLifecycleStage) int {
-	for i, s := range stage.Values() {
-		if s == stage {
-			return i
-		}
-	}
-	return -1
+	return slices.Index(lifecycleStages, stage)
 }
 
 func lifecycleStageNames() []string {
-	var names []string
-	for _, s := range types.ServiceDeploymentLifecycleStage("").Values() {
+	names := make([]string, 0, len(lifecycleStages))
+	for _, s := range lifecycleStages {
 		names = append(names, waitUntilECSPrefix+string(s))
 	}
 	return names
@@ -106,7 +119,17 @@ func (confirm confirmFunc) wrap(wait waitFunc) waitFunc {
 
 func (d *App) WaitFunc(sv *Service, confirm confirmFunc, until waitUntil) (waitFunc, error) {
 	defaultFunc := confirm.wrap(d.WaitServiceStable)
-	if sv == nil || sv.DeploymentController == nil {
+	if sv == nil {
+		return defaultFunc, nil
+	}
+	if sv.DeploymentController == nil {
+		// ECS is the default deployment controller when the service doesn't set
+		// one explicitly, so a lifecycle stage target must not fall back to the
+		// service-stable waiter silently.
+		if until.forECSLifecycleStage() {
+			stage := types.ServiceDeploymentLifecycleStage(until.ecsLifecycleStage())
+			return d.WaitServiceDeployLifecycleStage(stage), nil
+		}
 		return defaultFunc, nil
 	}
 	if dc := sv.DeploymentController; dc != nil {
@@ -277,8 +300,16 @@ func (d *App) WaitServiceDeployCompleted(ctx context.Context, sv *Service) error
 // allows returning before a long bakeTimeInMinutes elapses.
 func (d *App) WaitServiceDeployLifecycleStage(stage types.ServiceDeploymentLifecycleStage) waitFunc {
 	return func(ctx context.Context, sv *Service) error {
+		if lifecycleStageIndex(stage) < 0 {
+			// An unknown stage would index to -1 and be satisfied by any
+			// deployment state immediately, so reject it up front.
+			return fmt.Errorf("unknown lifecycle stage: %s (expected one of %s)", stage, strings.Join(lifecycleStageNames(), ", "))
+		}
 		if err := validateLifecycleStageSupported(sv, stage); err != nil {
 			return err
+		}
+		if sv == nil || sv.DeploymentConfiguration == nil || sv.DeploymentConfiguration.Strategy == "" {
+			d.LogWarn("deployment strategy is not set; a ROLLING deployment reports no lifecycle stage, so this waits until the deployment completes")
 		}
 		d.LogInfo("Waiting for service deployment lifecycle stage...", "stage", string(stage))
 		target := lifecycleStageIndex(stage)
@@ -366,27 +397,57 @@ func (d *App) waitServiceDeployment(ctx context.Context, done func(*types.Servic
 			d.LogInfo("service deployment status", "status", string(status))
 			prevStatus = status
 		}
-		switch status {
-		case types.ServiceDeploymentStatusSuccessful, types.ServiceDeploymentStatusRollbackSuccessful:
+		result, err := evaluateDeploymentStatus(&dp, done)
+		if err != nil {
+			return err
+		}
+		switch result {
+		case waitDeploymentCompleted:
 			d.LogInfo("service deployment completed", "status", string(status))
 			return nil
-		case types.ServiceDeploymentStatusStopped, types.ServiceDeploymentStatusRollbackFailed, types.ServiceDeploymentStatusStopRequested:
-			return fmt.Errorf("Service deployment failed %s", status)
+		case waitDeploymentReachedStage:
+			d.LogInfo("service deployment reached the lifecycle stage", "stage", string(dp.LifecycleStage))
+			return nil
 		default:
 			d.LogDebug("Deployment %s, waiting...", status)
 		}
+	}
+}
 
-		// A lifecycle stage target is only meaningful while the deployment is
-		// progressing. During a rollback the stage can still read as the target,
-		// so keep waiting for the rollback to reach a terminal status instead.
-		switch status {
-		case types.ServiceDeploymentStatusPending, types.ServiceDeploymentStatusInProgress:
-			if done != nil && done(&dp) {
-				d.LogInfo("service deployment reached the lifecycle stage", "stage", string(dp.LifecycleStage))
-				return nil
+type waitDeploymentResult int
+
+const (
+	waitDeploymentContinue waitDeploymentResult = iota
+	waitDeploymentCompleted
+	waitDeploymentReachedStage
+)
+
+// evaluateDeploymentStatus decides whether polling the service deployment can
+// stop. A non-nil done means the caller waits for a lifecycle stage of this
+// deployment, so a rollback is a failure instead of a terminal success.
+func evaluateDeploymentStatus(dp *types.ServiceDeployment, done func(*types.ServiceDeployment) bool) (waitDeploymentResult, error) {
+	switch dp.Status {
+	case types.ServiceDeploymentStatusSuccessful:
+		return waitDeploymentCompleted, nil
+	case types.ServiceDeploymentStatusRollbackSuccessful:
+		if done != nil {
+			if reason := aws.ToString(dp.StatusReason); reason != "" {
+				return waitDeploymentContinue, fmt.Errorf("service deployment has been rolled back before reaching the target lifecycle stage: %s", reason)
 			}
+			return waitDeploymentContinue, fmt.Errorf("service deployment has been rolled back before reaching the target lifecycle stage")
+		}
+		return waitDeploymentCompleted, nil
+	case types.ServiceDeploymentStatusStopped, types.ServiceDeploymentStatusRollbackFailed, types.ServiceDeploymentStatusStopRequested:
+		return waitDeploymentContinue, fmt.Errorf("Service deployment failed %s", dp.Status)
+	case types.ServiceDeploymentStatusPending, types.ServiceDeploymentStatusInProgress:
+		// A lifecycle stage target is only meaningful while the deployment is
+		// progressing. During a rollback the stage can still read as the
+		// target, so keep waiting for the rollback to reach a terminal status.
+		if done != nil && done(dp) {
+			return waitDeploymentReachedStage, nil
 		}
 	}
+	return waitDeploymentContinue, nil
 }
 
 func (d *App) getCodeDeployDeploymentID(ctx context.Context) (string, error) {

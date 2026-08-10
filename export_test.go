@@ -38,6 +38,15 @@ var (
 
 	LifecycleStageIndex             = lifecycleStageIndex
 	ValidateLifecycleStageSupported = validateLifecycleStageSupported
+	EvaluateDeploymentStatus        = evaluateDeploymentStatus
+)
+
+type WaitDeploymentResult = waitDeploymentResult
+
+const (
+	WaitDeploymentContinue     = waitDeploymentContinue
+	WaitDeploymentCompleted    = waitDeploymentCompleted
+	WaitDeploymentReachedStage = waitDeploymentReachedStage
 )
 
 type ModifyAutoScalingParams = modifyAutoScalingParams
