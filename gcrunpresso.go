@@ -40,9 +40,12 @@ type Option struct {
 	Job                       string
 	ImpersonateServiceAccount string
 	Timeout                   time.Duration
+	ClientOptions             []option.ClientOption
 }
 
-func New(ctx context.Context, opt *Option) (*App, error) {
+type AppOption func(*App)
+
+func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 	conf := NewDefaultConfig()
 	if opt.ConfigFilePath != "" {
 		loader := newConfigLoader()
@@ -61,7 +64,11 @@ func New(ctx context.Context, opt *Option) (*App, error) {
 		timeout: conf.Timeout.Duration,
 	}
 
-	var clientOpts []option.ClientOption
+	for _, ao := range appOpts {
+		ao(app)
+	}
+
+	clientOpts := append([]option.ClientOption{}, opt.ClientOptions...)
 	if sa := conf.ImpersonateServiceAccount; sa != "" {
 		ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
 			TargetPrincipal: sa,
@@ -104,6 +111,30 @@ func New(ctx context.Context, opt *Option) (*App, error) {
 	}
 	app.tasksClient = tasksClient
 
+	logTailClient, err := logging.NewClient(ctx, clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logging tail client: %w", err)
+	}
+	app.logTailClient = logTailClient
+
+	logAdminClient, err := logadmin.NewClient(ctx, conf.Project, clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logging admin client: %w", err)
+	}
+	app.logAdminClient = logAdminClient
+
+	secretClient, err := secretmanager.NewClient(ctx, clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create secret manager client: %w", err)
+	}
+	app.secretClient = secretClient
+
+	arClient, err := artifactregistry.NewClient(ctx, clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create artifact registry client: %w", err)
+	}
+	app.arClient = arClient
+
 	return app, nil
 }
 
@@ -116,4 +147,113 @@ func (d *App) Timeout() time.Duration {
 		return d.timeout
 	}
 	return defaultTimeout
+}
+
+func (d *App) ServicesClient() *run.ServicesClient {
+	return d.servicesClient
+}
+
+func (d *App) JobsClient() *run.JobsClient {
+	return d.jobsClient
+}
+
+func (d *App) RevisionsClient() *run.RevisionsClient {
+	return d.revisionsClient
+}
+
+func (d *App) ExecutionsClient() *run.ExecutionsClient {
+	return d.executionsClient
+}
+
+func (d *App) TasksClient() *run.TasksClient {
+	return d.tasksClient
+}
+
+func (d *App) LogTailClient() *logging.Client {
+	return d.logTailClient
+}
+
+func (d *App) LogAdminClient() *logadmin.Client {
+	return d.logAdminClient
+}
+
+func (d *App) SecretManagerClient() *secretmanager.Client {
+	return d.secretClient
+}
+
+func (d *App) ArtifactRegistryClient() *artifactregistry.Client {
+	return d.arClient
+}
+
+func (d *App) ResourceLocationPath() string {
+	return fmt.Sprintf("projects/%s/locations/%s", d.config.Project, d.config.Location)
+}
+
+func (d *App) ResourceServicePath() string {
+	return fmt.Sprintf("projects/%s/locations/%s/services/%s", d.config.Project, d.config.Location, d.config.Service)
+}
+
+func (d *App) ResourceJobPath() string {
+	return fmt.Sprintf("projects/%s/locations/%s/jobs/%s", d.config.Project, d.config.Location, d.config.Job)
+}
+
+func (d *App) ResourceRevisionPath(revision string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/services/%s/revisions/%s", d.config.Project, d.config.Location, d.config.Service, revision)
+}
+
+func (d *App) ResourceExecutionPath(execution string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/jobs/%s/executions/%s", d.config.Project, d.config.Location, d.config.Job, execution)
+}
+
+func (d *App) Close() error {
+	var errs []error
+	if d.servicesClient != nil {
+		if err := d.servicesClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.jobsClient != nil {
+		if err := d.jobsClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.revisionsClient != nil {
+		if err := d.revisionsClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.executionsClient != nil {
+		if err := d.executionsClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.tasksClient != nil {
+		if err := d.tasksClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.logTailClient != nil {
+		if err := d.logTailClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.logAdminClient != nil {
+		if err := d.logAdminClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.secretClient != nil {
+		if err := d.secretClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.arClient != nil {
+		if err := d.arClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing clients: %v", errs)
+	}
+	return nil
 }

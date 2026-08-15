@@ -23,6 +23,8 @@ type CLIOptions struct {
 	ConfigFilePath            string            `name:"config" help:"config file" default:"gcrunpresso.yml" env:"GCRUNPRESSO_CONFIG"`
 	Project                   string            `help:"GCP Project ID" env:"GOOGLE_CLOUD_PROJECT"`
 	Location                  string            `help:"GCP Location/Region" env:"CLOUDSDK_COMPUTE_REGION"`
+	Service                   string            `help:"Cloud Run Service name" env:"GCRUNPRESSO_SERVICE"`
+	Job                       string            `help:"Cloud Run Job name" env:"GCRUNPRESSO_JOB"`
 	ImpersonateServiceAccount string            `help:"Service Account email to impersonate" env:"GCRUNPRESSO_IMPERSONATE_SERVICE_ACCOUNT"`
 	Timeout                   *time.Duration    `help:"timeout duration" env:"GCRUNPRESSO_TIMEOUT"`
 	Color                     bool              `help:"enable colorized output" env:"GCRUNPRESSO_COLOR" default:"true" negatable:""`
@@ -81,6 +83,8 @@ func dispatchApp(ctx context.Context, sub string, usage func(), opts *CLIOptions
 		ConfigFilePath:            opts.resolveConfigFilePath(),
 		Project:                   opts.Project,
 		Location:                  opts.Location,
+		Service:                   opts.Service,
+		Job:                       opts.Job,
 		ImpersonateServiceAccount: opts.ImpersonateServiceAccount,
 	}
 	if opts.Timeout != nil {
@@ -91,6 +95,7 @@ func dispatchApp(ctx context.Context, sub string, usage func(), opts *CLIOptions
 	if err != nil {
 		return err
 	}
+	defer app.Close()
 	app.LogDebug("dispatching subcommand: %s", sub)
 
 	switch sub {
