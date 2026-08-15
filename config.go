@@ -145,6 +145,16 @@ func (l *configLoader) Load(ctx context.Context, path string, c *Config) error {
 		return fmt.Errorf("failed to parse config %s: %w", path, err)
 	}
 
+	for _, p := range c.Plugins {
+		cp := ConfigPlugin{
+			Name:   p.Name,
+			Config: p.Config,
+		}
+		if err := cp.Setup(ctx, c, l); err != nil {
+			return fmt.Errorf("failed to setup plugin %s: %w", p.Name, err)
+		}
+	}
+
 	return nil
 }
 
@@ -260,4 +270,15 @@ func (d *App) LoadJobDefinition(path string) (*runpb.Job, error) {
 	}
 
 	return &job, nil
+}
+
+func (d *App) readDefinitionFile(path string) ([]byte, error) {
+	if filepath.Ext(path) == jsonnetExt {
+		jsonStr, err := d.loader.VM.EvaluateFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate jsonnet %s: %w", path, err)
+		}
+		return d.loader.ReadWithEnvBytes([]byte(jsonStr))
+	}
+	return d.loader.ReadWithEnv(path)
 }

@@ -3,25 +3,12 @@ package gcrunpresso
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/samber/lo"
 )
-
-func (d *App) readDefinitionFile(path string) ([]byte, error) {
-	switch filepath.Ext(path) {
-	case jsonnetExt:
-		jsonStr, err := d.loader.VM.EvaluateFile(path)
-		if err != nil {
-			return nil, err
-		}
-		return d.loader.ReadWithEnvBytes([]byte(jsonStr))
-	}
-	return d.loader.ReadWithEnv(path)
-}
 
 func parseLabels(s string) (map[string]string, error) {
 	labels := make(map[string]string)
