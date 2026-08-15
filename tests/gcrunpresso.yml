@@ -1,0 +1,5 @@
+project: test-project
+location: asia-northeast1
+service: test-service
+service_definition: service.yaml
+timeout: 5m

@@ -1,0 +1,17 @@
+template:
+  containers:
+    - image: "asia-northeast1-docker.pkg.dev/test-project/repo/app:{{ env "TAG" "v1.0.0" }}"
+      env:
+        - name: "ENV"
+          value: "testing"
+      resources:
+        limits:
+          cpu: "1000m"
+          memory: "512Mi"
+  scaling:
+    minInstanceCount: 1
+    maxInstanceCount: 5
+
+traffic:
+  - type: TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST
+    percent: 100
