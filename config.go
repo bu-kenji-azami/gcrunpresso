@@ -1,4 +1,4 @@
-package ecspresso
+package gcrunpresso
 
 import (
 	"context"
@@ -8,273 +8,168 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
-	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/google/go-jsonnet"
-	goVersion "github.com/hashicorp/go-version"
-	"github.com/kayac/ecspresso/v2/appspec"
-	goConfig "github.com/kayac/go-config"
-	"github.com/samber/lo"
+	"github.com/google/go-jsonnet/ast"
+	"github.com/goccy/go-yaml"
+	"github.com/kayac/go-config"
 )
 
 const (
-	DefaultClusterName = "default"
-	DefaultTimeout     = 10 * time.Minute
+	defaultTimeout = 10 * time.Minute
+	jsonnetExt     = ".jsonnet"
 )
 
-var awsv2ConfigLoadOptionsFunc []func(*awsConfig.LoadOptions) error
-
-type configLoader struct {
-	*goConfig.Loader
-	VM *jsonnet.VM
-}
-
-func newConfigLoader(extStr, extCode map[string]string) *configLoader {
-	vm := jsonnet.MakeVM()
-	for k, v := range extStr {
-		vm.ExtVar(k, v)
-	}
-	for k, v := range extCode {
-		vm.ExtCode(k, v)
-	}
-	for _, f := range DefaultJsonnetNativeFuncs() {
-		vm.NativeFunction(f)
-	}
-	return &configLoader{
-		Loader: goConfig.New(),
-		VM:     vm,
-	}
-}
-
-// Config represents a configuration.
 type Config struct {
-	RequiredVersion       string            `yaml:"required_version,omitempty" json:"required_version,omitempty"`
-	Region                string            `yaml:"region" json:"region"`
-	Cluster               string            `yaml:"cluster" json:"cluster"`
-	Service               string            `yaml:"service" json:"service"`
-	ServiceDefinitionPath string            `yaml:"service_definition,omitempty" json:"service_definition,omitempty"`
-	TaskDefinitionPath    string            `yaml:"task_definition,omitempty" json:"task_definition,omitempty"`
-	ExpressDefinitionPath string            `yaml:"express_definition,omitempty" json:"express_definition,omitempty"`
-	Plugins               []ConfigPlugin    `yaml:"plugins,omitempty" json:"plugins,omitempty"`
-	AppSpec               *appspec.AppSpec  `yaml:"appspec,omitempty" json:"appspec,omitempty"`
-	FilterCommand         string            `yaml:"filter_command,omitempty" json:"filter_command,omitempty"`
-	Timeout               *Duration         `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	CodeDeploy            *ConfigCodeDeploy `yaml:"codedeploy,omitempty" json:"codedeploy,omitempty"`
-	Ignore                *ConfigIgnore     `yaml:"ignore,omitempty" json:"ignore,omitempty"`
+	Project                   string          `yaml:"project" json:"project"`
+	Location                  string          `yaml:"location" json:"location"`
+	Service                   string          `yaml:"service,omitempty" json:"service,omitempty"`
+	Job                       string          `yaml:"job,omitempty" json:"job,omitempty"`
+	ServiceDefinitionPath     string          `yaml:"service_definition,omitempty" json:"service_definition,omitempty"`
+	JobDefinitionPath         string          `yaml:"job_definition,omitempty" json:"job_definition,omitempty"`
+	ImpersonateServiceAccount string          `yaml:"impersonate_service_account,omitempty" json:"impersonate_service_account,omitempty"`
+	Timeout                   Duration        `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Plugins                   []*PluginConfig `yaml:"plugins,omitempty" json:"plugins,omitempty"`
 
-	path               string
-	templateFuncs      []template.FuncMap
-	jsonnetNativeFuncs []*jsonnet.NativeFunction
-	dir                string
-	versionConstraints goVersion.Constraints
-	awsv2Config        aws.Config
-
-	// pluginInstances records the runtime instance each plugin's Setup
-	// produces, when the plugin has something callers may want to access
-	// after setup. Currently only the tfstate plugin uses this (storing
-	// its *tfstate.TFState so callers can inject overrides via
-	// App.TFState). Other plugins resolve at template-render time and
-	// register nothing here.
-	pluginInstances []pluginInstance
+	dir string
 }
 
-type pluginInstance struct {
-	name       string
-	funcPrefix string
-	value      any
+type PluginConfig struct {
+	Name   string         `yaml:"name" json:"name"`
+	Type   string         `yaml:"type" json:"type"`
+	Config map[string]any `yaml:"config" json:"config"`
 }
 
-type ConfigCodeDeploy struct {
-	ApplicationName      string `yaml:"application_name,omitempty" json:"application_name,omitempty"`
-	DeploymentGroupName  string `yaml:"deployment_group_name,omitempty" json:"deployment_group_name,omitempty"`
-	DeploymentConfigName string `yaml:"deployment_config_name,omitempty" json:"deployment_config_name,omitempty"`
-}
-
-// Load loads configuration file from file path.
-func (l *configLoader) Load(ctx context.Context, path string, version string) (*Config, error) {
-	conf := &Config{path: path}
-	ext := filepath.Ext(path)
-	switch ext {
-	case ymlExt, yamlExt:
-		b, err := l.ReadWithEnv(path)
-		if err != nil {
-			return nil, err
-		}
-		if err := unmarshalYAML(b, conf, path); err != nil {
-			return nil, fmt.Errorf("failed to parse yaml: %w", err)
-		}
-	case jsonExt, jsonnetExt:
-		jsonStr, err := l.VM.EvaluateFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate jsonnet file: %w", err)
-		}
-		b, err := l.ReadWithEnvBytes([]byte(jsonStr))
-		if err != nil {
-			return nil, fmt.Errorf("failed to read template file: %w", err)
-		}
-		if err := unmarshalJSON(b, conf, path); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal json: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unsupported config file extension: %s", ext)
-	}
-
-	conf.dir = filepath.Dir(path)
-	if err := conf.Restrict(ctx); err != nil {
-		return nil, err
-	}
-	if err := conf.ValidateVersion(version); err != nil {
-		return nil, err
-	}
-	for _, f := range conf.templateFuncs {
-		l.Funcs(f)
-	}
-	for _, f := range conf.jsonnetNativeFuncs {
-		l.VM.NativeFunction(f)
-	}
-	return conf, nil
-}
-
-func (c *Config) OverrideByCLIOptions(opt *CLIOptions) {
-	if opt.Timeout != nil {
-		c.Timeout = &Duration{*opt.Timeout}
-	}
-	if opt.FilterCommand != "" {
-		c.FilterCommand = opt.FilterCommand
-	}
-}
-
-// Restrict restricts a configuration.
-func (c *Config) Restrict(ctx context.Context) error {
-	if c.Cluster == "" {
-		c.Cluster = DefaultClusterName
-	}
-	if c.dir == "" {
-		c.dir = "."
-	}
-	if c.ServiceDefinitionPath != "" && !filepath.IsAbs(c.ServiceDefinitionPath) {
-		c.ServiceDefinitionPath = filepath.Join(c.dir, c.ServiceDefinitionPath)
-	}
-	if c.TaskDefinitionPath != "" && !filepath.IsAbs(c.TaskDefinitionPath) {
-		c.TaskDefinitionPath = filepath.Join(c.dir, c.TaskDefinitionPath)
-	}
-	if c.ExpressDefinitionPath != "" && !filepath.IsAbs(c.ExpressDefinitionPath) {
-		c.ExpressDefinitionPath = filepath.Join(c.dir, c.ExpressDefinitionPath)
-	}
-	if c.RequiredVersion != "" {
-		constraints, err := goVersion.NewConstraint(c.RequiredVersion)
-		if err != nil {
-			return fmt.Errorf("required_version has invalid format: %w", err)
-		}
-		c.versionConstraints = constraints
-	}
-	if c.Timeout == nil {
-		c.Timeout = &Duration{Duration: DefaultTimeout}
-	}
-	if c.Region == "" {
-		c.Region = os.Getenv("AWS_REGION")
-	}
-	var err error
-	var optsFunc []func(*awsConfig.LoadOptions) error
-	if len(awsv2ConfigLoadOptionsFunc) == 0 {
-		// default
-		// Log("[INFO] use default aws config load options")
-		optsFunc = []func(*awsConfig.LoadOptions) error{
-			awsConfig.WithRegion(c.Region),
-		}
-	} else {
-		// Log("[INFO] override aws config load options")
-		optsFunc = awsv2ConfigLoadOptionsFunc
-	}
-	c.awsv2Config, err = awsConfig.LoadDefaultConfig(ctx, optsFunc...)
-	if err != nil {
-		return fmt.Errorf("failed to load aws config: %w", err)
-	}
-	if err := c.setupPlugins(ctx); err != nil {
-		return fmt.Errorf("failed to setup plugins: %w", err)
-	}
-	if c.FilterCommand != "" {
-		LogWarn("filter_command is deprecated, use environment variable or CLI flag instead")
-	}
-	return nil
-}
-
-func (c *Config) AssumeRole(assumeRoleARN string) {
-	if assumeRoleARN == "" {
-		return
-	}
-	LogInfo("assuming role", "role", assumeRoleARN)
-	stsClient := sts.NewFromConfig(c.awsv2Config)
-	assumeRoleProvider := stscreds.NewAssumeRoleProvider(stsClient, assumeRoleARN)
-	c.awsv2Config.Credentials = aws.NewCredentialsCache(assumeRoleProvider)
-}
-
-func (c *Config) setupPlugins(ctx context.Context) error {
-	plugins := []ConfigPlugin{}
-	for _, name := range defaultPluginNames {
-		plugins = append(plugins, ConfigPlugin{Name: name})
-	}
-	plugins = append(plugins, c.Plugins...)
-	for _, p := range plugins {
-		if err := p.Setup(ctx, c); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ValidateVersion validates a version satisfies required_version.
-func (c *Config) ValidateVersion(version string) error {
-	if c.versionConstraints == nil {
-		return nil
-	}
-	v, err := goVersion.NewVersion(version)
-	if err != nil {
-		LogWarn("invalid version format, skipping required_version check", "version", version)
-		// invalid version string (e.g. "current") always allowed
-		return nil
-	}
-	if !c.versionConstraints.Check(v) {
-		return fmt.Errorf("version %s does not satisfy constraints required_version: %s", version, c.versionConstraints)
-	}
-
-	return nil
-}
-
-func (c *Config) isExpressMode() bool {
-	return c.ExpressDefinitionPath != ""
-}
-
-// NewDefaultConfig creates a default configuration.
 func NewDefaultConfig() *Config {
 	return &Config{
-		Region:  os.Getenv("AWS_REGION"),
-		Timeout: &Duration{DefaultTimeout},
+		Timeout: Duration{Duration: defaultTimeout},
 	}
 }
 
-type ConfigIgnore struct {
-	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+type configLoader struct {
+	*config.Loader
+	VM      *jsonnet.VM
+	FuncMap template.FuncMap
 }
 
-type hasTags interface {
-	GetTags() []types.Tag
-	SetTags([]types.Tag)
-}
-
-func (i *ConfigIgnore) filterTags(tags []types.Tag) []types.Tag {
-	if i == nil || len(i.Tags) == 0 {
-		return tags
+func newConfigLoader() *configLoader {
+	cl := &configLoader{
+		Loader:  config.New(),
+		VM:      jsonnet.MakeVM(),
+		FuncMap: make(template.FuncMap),
 	}
-	return lo.Filter(tags, func(tag types.Tag, _ int) bool {
-		return !lo.Contains(i.Tags, aws.ToString(tag.Key))
+	cl.Funcs(template.FuncMap{
+		"env": func(keys ...string) string {
+			if len(keys) == 0 {
+				return ""
+			}
+			val := os.Getenv(keys[0])
+			if val != "" {
+				return val
+			}
+			if len(keys) > 1 {
+				return keys[1]
+			}
+			return ""
+		},
+		"must_env": func(key string) (string, error) {
+			val := os.Getenv(key)
+			if val == "" {
+				return "", fmt.Errorf("environment variable %s is not set", key)
+			}
+			return val, nil
+		},
 	})
+	cl.VM.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "env",
+		Params: []ast.Identifier{"key", "default"},
+		Func: func(args []any) (any, error) {
+			key, ok := args[0].(string)
+			if !ok {
+				return nil, fmt.Errorf("first argument must be string")
+			}
+			val := os.Getenv(key)
+			if val != "" {
+				return val, nil
+			}
+			if len(args) > 1 {
+				if def, ok := args[1].(string); ok {
+					return def, nil
+				}
+			}
+			return "", nil
+		},
+	})
+	return cl
 }
 
-func (i *ConfigIgnore) Apply(v hasTags) error {
-	v.SetTags(i.filterTags(v.GetTags()))
+func (l *configLoader) Load(ctx context.Context, path string, c *Config) error {
+	c.dir = filepath.Dir(path)
+	var content []byte
+	var err error
+
+	if filepath.Ext(path) == jsonnetExt {
+		jsonStr, err := l.VM.EvaluateFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate jsonnet %s: %w", path, err)
+		}
+		content, err = l.ReadWithEnvBytes([]byte(jsonStr))
+		if err != nil {
+			return fmt.Errorf("failed to process env in %s: %w", path, err)
+		}
+	} else {
+		content, err = l.ReadWithEnv(path)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", path, err)
+		}
+	}
+
+	if err := yaml.Unmarshal(content, c); err != nil {
+		return fmt.Errorf("failed to parse config %s: %w", path, err)
+	}
+
+	return nil
+}
+
+func (c *Config) Restrict(opt *Option) error {
+	if opt.Project != "" {
+		c.Project = opt.Project
+	}
+	if c.Project == "" {
+		c.Project = os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if c.Project == "" {
+			c.Project = os.Getenv("CLOUDSDK_CORE_PROJECT")
+		}
+	}
+
+	if opt.Location != "" {
+		c.Location = opt.Location
+	}
+	if c.Location == "" {
+		c.Location = os.Getenv("CLOUDSDK_COMPUTE_REGION")
+	}
+
+	if opt.Service != "" {
+		c.Service = opt.Service
+	}
+	if opt.Job != "" {
+		c.Job = opt.Job
+	}
+	if opt.ImpersonateServiceAccount != "" {
+		c.ImpersonateServiceAccount = opt.ImpersonateServiceAccount
+	}
+	if opt.Timeout > 0 {
+		c.Timeout = Duration{Duration: opt.Timeout}
+	}
+
+	if c.Project == "" {
+		return fmt.Errorf("project is required (set in config, --project, or GOOGLE_CLOUD_PROJECT)")
+	}
+	if c.Location == "" {
+		return fmt.Errorf("location is required (set in config, --location, or CLOUDSDK_COMPUTE_REGION)")
+	}
+	if c.Service == "" && c.Job == "" {
+		return fmt.Errorf("either service or job is required")
+	}
+
 	return nil
 }

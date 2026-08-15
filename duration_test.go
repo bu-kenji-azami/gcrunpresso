@@ -1,4 +1,4 @@
-package ecspresso_test
+package gcrunpresso_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/kayac/ecspresso/v2"
+	"github.com/kayac/gcrunpresso/v2"
 )
 
 var testDurations = []struct {
@@ -25,7 +25,7 @@ func TestDuration(t *testing.T) {
 	b := bytes.NewBuffer(nil)
 	for _, ds := range testDurations {
 		b.Reset()
-		d := ecspresso.Duration{Duration: ds.dur}
+		d := gcrunpresso.Duration{Duration: ds.dur}
 		if d.String() != ds.str {
 			t.Errorf("expected %s, got %s", ds.str, d.String())
 		}

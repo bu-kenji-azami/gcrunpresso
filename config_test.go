@@ -1,466 +1,51 @@
-package ecspresso_test
+package gcrunpresso_test
 
 import (
-	"os"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/kayac/ecspresso/v2"
+	"github.com/kayac/gcrunpresso/v2"
 )
 
-func TestLoadServiceDefinition(t *testing.T) {
-	ctx := t.Context()
-	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{ConfigFilePath: "tests/test.yaml"})
-	if err != nil {
-		t.Error(err)
-	}
-	c := app.Config()
-	for _, ext := range []string{"", "net"} {
-		sv, err := app.LoadServiceDefinition(c.ServiceDefinitionPath + ext)
-		if err != nil || sv == nil {
-			t.Errorf("%s load failed: %s", c.ServiceDefinitionPath, err)
-		}
-
-		if *sv.ServiceName != "test" ||
-			aws.ToInt32(sv.DesiredCount) != 2 ||
-			aws.ToString(sv.LoadBalancers[0].TargetGroupArn) != "arn:aws:elasticloadbalancing:us-east-1:1111111111:targetgroup/test/12345678" ||
-			sv.LaunchType != types.LaunchTypeEc2 ||
-			sv.SchedulingStrategy != types.SchedulingStrategyReplica ||
-			sv.PropagateTags != types.PropagateTagsService ||
-			*sv.Tags[0].Key != "cluster" ||
-			*sv.Tags[0].Value != "default2" {
-			t.Errorf("unexpected service definition %#v", sv)
-		}
-		if dc := sv.DeploymentConfiguration; dc == nil {
-			t.Error("deployment configuration is nil")
-		} else {
-			if *dc.MaximumPercent != 200 || *dc.MinimumHealthyPercent != 50 {
-				t.Errorf("unexpected deployment configuration %#v", dc)
-			}
-			if dc.Alarms == nil {
-				t.Errorf("deployment configuration alarms is nil")
-			} else {
-				if len(dc.Alarms.AlarmNames) != 1 || dc.Alarms.AlarmNames[0] != "HighResponseLatencyAlarm" {
-					t.Errorf("unexpected alarms %#v", dc.Alarms)
-				}
-			}
-		}
+func TestDefaultConfig(t *testing.T) {
+	conf := gcrunpresso.NewDefaultConfig()
+	if conf.Timeout.Duration != 10*time.Minute {
+		t.Errorf("expected default timeout 10m, got %v", conf.Timeout.Duration)
 	}
 }
 
-func TestLoadConfigWithPluginAbsPath(t *testing.T) {
-	testLoadConfigWithPlugin(t, "tests/config_abs.yaml")
-}
+func TestConfigRestrict(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
 
-func TestLoadConfigWithPluginMultiple(t *testing.T) {
-	testLoadConfigWithPlugin(t, "tests/config_multiple_plugins.yaml")
-}
-
-func TestLoadConfigWithPluginDuplicate(t *testing.T) {
-	t.Setenv("TAG", "testing")
-	t.Setenv("JSON", `{"foo":"bar"}`)
-	ctx := t.Context()
-	loader := ecspresso.NewConfigLoader(nil, nil)
-	_, err := loader.Load(ctx, "tests/config_duplicate_plugins.yaml", "")
-	if err == nil {
-		t.Log("expected an error to occur, but it didn't.")
-		t.FailNow()
+	conf := gcrunpresso.NewDefaultConfig()
+	opt := &gcrunpresso.Option{
+		Service: "test-service",
 	}
-	expectedEnds := "already exists. set func_prefix to tfstate plugin"
-	if !strings.HasSuffix(err.Error(), expectedEnds) {
-		t.Log("unexpected error message")
-		t.Log("expected ends:", expectedEnds)
-		t.Log("actual:  ", err.Error())
-		t.FailNow()
+
+	if err := conf.Restrict(opt); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if conf.Project != "test-project" {
+		t.Errorf("expected project test-project, got %s", conf.Project)
+	}
+	if conf.Location != "asia-northeast1" {
+		t.Errorf("expected location asia-northeast1, got %s", conf.Location)
+	}
+	if conf.Service != "test-service" {
+		t.Errorf("expected service test-service, got %s", conf.Service)
 	}
 }
 
-func TestLoadConfigWithPlugin(t *testing.T) {
-	for _, ext := range []string{".yml", ".yaml", ".json", ".jsonnet"} {
-		t.Run("tests/ecspresso"+ext, func(t *testing.T) {
-			testLoadConfigWithPlugin(t, "tests/ecspresso"+ext)
-		})
-	}
-}
+func TestConfigRestrictMissingServiceAndJob(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
 
-func testLoadConfigWithPlugin(t *testing.T, path string) {
-	t.Setenv("TAG", "testing")
-	t.Setenv("JSON", `{"foo":"bar"}`)
-	t.Setenv("AWS_REGION", "ap-northeast-1")
-	ctx := t.Context()
-	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{ConfigFilePath: path})
-	if err != nil {
-		t.Error(err)
-	}
-	if app.Name() != "test/default" {
-		t.Errorf("unexpected name got %s", app.Name())
-	}
-	conf := app.Config()
-	if conf.Timeout.Duration != time.Minute*10 {
-		t.Errorf("unexpected timeout got %s expected %s", conf.Timeout.Duration, time.Minute*10)
-	}
+	conf := gcrunpresso.NewDefaultConfig()
+	opt := &gcrunpresso.Option{}
 
-	svd, err := app.LoadServiceDefinition(conf.ServiceDefinitionPath)
-	if err != nil {
-		t.Error(err)
-	}
-	t.Log(str(svd))
-	sgID := svd.NetworkConfiguration.AwsvpcConfiguration.SecurityGroups[0]
-	subnetID := svd.NetworkConfiguration.AwsvpcConfiguration.Subnets[0]
-	if sgID != "sg-12345678" {
-		t.Errorf("unexpected sg id got:%s", sgID)
-	}
-	if subnetID != "subnet-07ac54af5e41a4fc4" {
-		t.Errorf("unexpected subnet id got:%s", subnetID)
-	}
-	cb := *svd.DeploymentConfiguration.DeploymentCircuitBreaker
-	if !cb.Enable {
-		t.Errorf("unexpected deploymentCircuitBreaker.enable got:%v", cb.Enable)
-	}
-	if !cb.Rollback {
-		t.Errorf("unexpected deploymentCircuitBreaker.rollback got:%v", cb.Rollback)
-	}
-	if len(svd.Tags) != 1 {
-		t.Errorf("unexpected tags got:%s", str(svd.Tags))
-	}
-	if tag := svd.Tags[0]; *tag.Key != "Name" || *tag.Value != "test" {
-		t.Errorf("unexpected tag got:%s", str(tag))
-	}
-
-	td, err := app.LoadTaskDefinition(conf.TaskDefinitionPath)
-	if err != nil {
-		t.Error(err)
-	}
-	t.Log(str(td))
-	image := *td.ContainerDefinitions[0].Image
-	if image != "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/app:testing" {
-		t.Errorf("unexpected image got:%s", image)
-	}
-	env := td.ContainerDefinitions[0].Environment[0]
-	if *env.Name != "JSON" || *env.Value != `{"foo":"bar"}` {
-		t.Errorf("unexpected JSON got:%s", *env.Value)
-	}
-	if len(td.Tags) != 1 {
-		t.Errorf("unexpected tags got:%s", str(td.Tags))
-	}
-	if tag := td.Tags[0]; *tag.Key != "Name" || *tag.Value != "test" {
-		t.Errorf("unexpected tag got:%s", str(tag))
-	}
-}
-
-func TestRestrictConfigWithRequiredVersion(t *testing.T) {
-	cases := []struct {
-		RequiredVersion string
-		CurrentVersion  string
-	}{
-		{
-			RequiredVersion: ">= v1.0.0",
-			CurrentVersion:  "v1.2.1",
-		},
-		{
-			RequiredVersion: "= v1.0.0",
-			CurrentVersion:  "1.0.0",
-		},
-		{
-			RequiredVersion: "~> v1.1.0",
-			CurrentVersion:  "1.1.5",
-		},
-		{
-			RequiredVersion: "~> v1.0",
-			CurrentVersion:  "1.2.1",
-		},
-		{
-			RequiredVersion: ">= v1, < v2",
-			CurrentVersion:  "1.2.1",
-		},
-		{
-			RequiredVersion: ">= v1.2.1, < v2",
-			CurrentVersion:  "v1.2.1+3-g04fdc8e",
-		},
-		{
-			RequiredVersion: ">= v1",
-			CurrentVersion:  "current",
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.CurrentVersion+":"+c.RequiredVersion, func(t *testing.T) {
-			conf := ecspresso.NewDefaultConfig()
-			conf.RequiredVersion = c.RequiredVersion
-
-			if err := conf.ValidateVersion(c.CurrentVersion); err != nil {
-				t.Error(err)
-			}
-		})
-	}
-}
-
-func TestConfigWithRequiredVersionUnsatisfied(t *testing.T) {
-	cases := []struct {
-		RequiredVersion string
-		CurrentVersion  string
-		ErrorMessage    string
-	}{
-		{
-			RequiredVersion: "= v1.0.0",
-			CurrentVersion:  "v1.2.1",
-			ErrorMessage:    "does not satisfy constraints",
-		},
-		{
-			RequiredVersion: "~> v1.1.0",
-			CurrentVersion:  "v1.2.0",
-			ErrorMessage:    "does not satisfy constraints",
-		},
-		{
-			RequiredVersion: ">= v1.2.2, < v2",
-			CurrentVersion:  "v1.2.1+3-g04fdc8e",
-			ErrorMessage:    "does not satisfy constraints",
-		},
-		{
-			RequiredVersion: ">= v0, <v1",
-			CurrentVersion:  "v1.2.1",
-			ErrorMessage:    "does not satisfy constraints",
-		},
-	}
-	ctx := t.Context()
-	for _, c := range cases {
-		t.Run(c.CurrentVersion+":"+c.RequiredVersion, func(t *testing.T) {
-			conf := ecspresso.NewDefaultConfig()
-			conf.RequiredVersion = c.RequiredVersion
-			if err := conf.Restrict(ctx); err != nil {
-				t.Error(err)
-				return
-			}
-			err := conf.ValidateVersion(c.CurrentVersion)
-			if err == nil {
-				t.Error("expected any error, but no error")
-				return
-			}
-			if !strings.Contains(err.Error(), c.ErrorMessage) {
-				t.Errorf("unexpected error got:%s", err)
-			}
-		})
-	}
-}
-
-func TestConfigWithInvalidRequiredVersion(t *testing.T) {
-	cases := []struct {
-		RequiredVersion string
-		CurrentVersion  string
-		ErrorMessage    string
-	}{
-		{
-			RequiredVersion: "hoge",
-			CurrentVersion:  "v1.2.1",
-			ErrorMessage:    "invalid format",
-		},
-	}
-	ctx := t.Context()
-	for _, c := range cases {
-		t.Run(c.CurrentVersion+":"+c.RequiredVersion, func(t *testing.T) {
-			conf := ecspresso.NewDefaultConfig()
-			conf.RequiredVersion = c.RequiredVersion
-			err := conf.Restrict(ctx)
-			if err == nil {
-				t.Error("expected any error, but no error")
-				return
-			}
-			if !strings.Contains(err.Error(), c.ErrorMessage) {
-				t.Errorf("unexpected error got:%s", err)
-			}
-		})
-	}
-}
-
-func TestLoadConfigWithoutTimeout(t *testing.T) {
-	t.Setenv("AWS_REGION", "ap-northeast-2")
-
-	ctx := t.Context()
-	loader := ecspresso.NewConfigLoader(nil, nil)
-	conf, err := loader.Load(ctx, "tests/notimeout.yml", "")
-	if err != nil {
-		t.Log("unexpected an error", err)
-		t.FailNow()
-	}
-	if conf.Timeout == nil {
-		t.Error("expected default timeout, but nil")
-	}
-	if conf.Timeout.Duration != ecspresso.DefaultTimeout {
-		t.Errorf("expected default timeout, but %v", conf.Timeout.Duration)
-	}
-
-	if conf.Region != "ap-northeast-2" {
-		t.Errorf("expected region from AWS_REGION, but %v", conf.Region)
-	}
-}
-
-func TestLoadConfigForCodeDeploy(t *testing.T) {
-	ctx := t.Context()
-	loader := ecspresso.NewConfigLoader(nil, nil)
-	for _, ext := range []string{"yml", "json", "jsonnet"} {
-		name := "tests/config_codedeploy." + ext
-		conf, err := loader.Load(ctx, name, "")
-		if err != nil {
-			t.Error(err)
-		}
-		if conf.CodeDeploy.ApplicationName != "myapp" {
-			t.Errorf("expected application name=myapp, but %v", conf.CodeDeploy.ApplicationName)
-		}
-		if conf.CodeDeploy.DeploymentGroupName != "mydeployment" {
-			t.Errorf("expected deployment group name=mydeployment, but %v", conf.CodeDeploy.DeploymentGroupName)
-		}
-		if conf.CodeDeploy.DeploymentConfigName != "myConfigName" {
-			t.Errorf("expected deployment config name=myConfigName, but %v", conf.CodeDeploy.DeploymentConfigName)
-		}
-	}
-}
-
-var FilterCommandTests = []struct {
-	Env      string
-	Expected string
-}{
-	{"", "fzf"},
-	{"peco", "peco"},
-}
-
-func TestFilterCommandDeprecated(t *testing.T) {
-	ctx := t.Context()
-	for _, ts := range FilterCommandTests {
-		app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
-			ConfigFilePath: "tests/filter_command.yml",
-			FilterCommand:  ts.Env,
-		})
-		if err != nil {
-			t.Error(err)
-		}
-		if app.FilterCommand() != ts.Expected {
-			t.Errorf("expected %s, but got %s", ts.Expected, app.FilterCommand())
-		}
-	}
-}
-
-var ConfigIgnoreTests = []struct {
-	name         string
-	ignore       *ecspresso.ConfigIgnore
-	resourceTags []types.Tag
-	expectedTags []types.Tag
-}{
-	{
-		name:   "ignore all",
-		ignore: &ecspresso.ConfigIgnore{Tags: []string{"foo", "bar", "baz"}},
-		resourceTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-			{Key: ptr("bar"), Value: ptr("y")},
-			{Key: ptr("baz"), Value: ptr("z")},
-		},
-		expectedTags: []types.Tag{},
-	},
-	{
-		name:   "ignore some",
-		ignore: &ecspresso.ConfigIgnore{Tags: []string{"foo", "bar"}},
-		resourceTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-			{Key: ptr("bar"), Value: ptr("y")},
-			{Key: ptr("baz"), Value: ptr("z")},
-		},
-		expectedTags: []types.Tag{
-			{Key: ptr("baz"), Value: ptr("z")},
-		},
-	},
-	{
-		name:   "ignore nil",
-		ignore: nil,
-		resourceTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-			{Key: ptr("bar"), Value: ptr("y")},
-		},
-		expectedTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-			{Key: ptr("bar"), Value: ptr("y")},
-		},
-	},
-	{
-		name:   "ignore case sensitive",
-		ignore: &ecspresso.ConfigIgnore{Tags: []string{"Foo"}},
-		resourceTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-			{Key: ptr("Foo"), Value: ptr("y")},
-		},
-		expectedTags: []types.Tag{
-			{Key: ptr("foo"), Value: ptr("x")},
-		},
-	},
-}
-
-func TestConfigIgnore(t *testing.T) {
-	opt := cmpopts.IgnoreUnexported(types.Tag{})
-	for _, tt := range ConfigIgnoreTests {
-		t.Run(tt.name, func(t *testing.T) {
-			tags := tt.ignore.FilterTags(tt.resourceTags)
-			if diff := cmp.Diff(tt.expectedTags, tags, opt); diff != "" {
-				t.Errorf("unexpected tags (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-// When the tfstate plugin has optional=true and the configured path/url
-// cannot be read, ecspresso must continue with an empty state instead of
-// failing config load.
-func TestLoadConfigWithTFStatePluginOptional(t *testing.T) {
-	t.Setenv("AWS_REGION", "ap-northeast-1")
-	ctx := t.Context()
-	app, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
-		ConfigFilePath: "tests/config_tfstate_optional.yaml",
-	})
-	if err != nil {
-		t.Fatalf("expected New to succeed with optional tfstate plugin, got: %s", err)
-	}
-	if app == nil {
-		t.Fatal("app is nil")
-	}
-}
-
-// optional must be a bool. Other types (e.g. the string "true") are
-// rejected so users do not silently get the empty-state fallback by typo.
-func TestLoadConfigWithTFStatePluginOptionalInvalidType(t *testing.T) {
-	t.Setenv("AWS_REGION", "ap-northeast-1")
-	ctx := t.Context()
-	_, err := ecspresso.New(ctx, &ecspresso.CLIOptions{
-		ConfigFilePath: "tests/config_tfstate_optional_invalid.yaml",
-	})
-	if err == nil {
-		t.Fatal("expected error for non-bool optional, got nil")
-	}
-	if !strings.Contains(err.Error(), "optional must be a bool") {
-		t.Errorf("unexpected error message: %s", err)
-	}
-}
-
-func TestLoadServiceDefinitionWithMonitoring(t *testing.T) {
-	src, err := os.ReadFile("tests/sv-monitoring.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sv ecspresso.Service
-	if err := ecspresso.UnmarshalJSONForStruct(src, &sv, "tests/sv-monitoring.json"); err != nil {
-		t.Fatal(err)
-	}
-	if sv.Monitoring == nil {
-		t.Fatal("monitoring is nil")
-	}
-	if len(sv.Monitoring.MetricConfigurations) != 1 {
-		t.Fatalf("unexpected metricConfigurations length: %d", len(sv.Monitoring.MetricConfigurations))
-	}
-	mc := sv.Monitoring.MetricConfigurations[0]
-	if diff := cmp.Diff(mc.MetricNames, []string{"CPUUtilization", "MemoryUtilization"}); diff != "" {
-		t.Errorf("unexpected metricNames (-want +got):\n%s", diff)
-	}
-	if aws.ToInt32(mc.ResolutionSeconds) != 20 {
-		t.Errorf("unexpected resolutionSeconds: %d", aws.ToInt32(mc.ResolutionSeconds))
+	if err := conf.Restrict(opt); err == nil {
+		t.Fatal("expected error when neither service nor job is set, got nil")
 	}
 }

@@ -1,14 +1,14 @@
-package ecspresso
+package gcrunpresso
 
-import "context"
+import (
+	"context"
+)
 
 type StatusOption struct {
-	Events int `help:"show events num" default:"10"`
+	Events bool `help:"show recent events" default:"false"`
 }
 
 func (d *App) Status(ctx context.Context, opt StatusOption) error {
-	ctx, cancel := d.Start(ctx)
-	defer cancel()
-	_, err := d.DescribeServiceStatus(ctx, opt.Events)
-	return err
+	d.LogInfo("status command called")
+	return nil
 }

@@ -1,16 +1,17 @@
-package ecspresso
+package gcrunpresso
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/fatih/color"
+	"github.com/hashicorp/go-envparse"
 )
 
 func ParseCLIv2(args []string) (string, *CLIOptions, func(), error) {
-	// compatible with v1
-	if len(args) == 0 || len(args) > 0 && args[0] == "help" {
+	if len(args) == 0 || (len(args) > 0 && args[0] == "help") {
 		args = []string{"--help"}
 	}
 
@@ -25,12 +26,8 @@ func ParseCLIv2(args []string) (string, *CLIOptions, func(), error) {
 	}
 	sub := strings.Fields(c.Command())[0]
 
-	// Kong allocates all cmd:"" pointer fields during parsing.
-	// Clear inactive subcommand pointers so nil checks work for dispatch.
-	clearInactiveSubcommands(&opts, c.Command())
-
 	for _, envFile := range opts.Envfile {
-		if err := ExportEnvFile(envFile); err != nil {
+		if err := exportEnvFile(envFile); err != nil {
 			return sub, &opts, nil, fmt.Errorf("failed to load envfile: %w", err)
 		}
 	}
@@ -45,70 +42,20 @@ func ParseCLIv2(args []string) (string, *CLIOptions, func(), error) {
 	return sub, &opts, func() { c.PrintUsage(true) }, nil
 }
 
-func clearInactiveSubcommands(opts *CLIOptions, cmd string) {
-	fields := strings.Fields(cmd)
-	if len(fields) < 2 {
-		return
+func exportEnvFile(file string) error {
+	f, err := os.Open(file)
+	if err != nil {
+		return err
 	}
-	primary, subcmd := fields[0], fields[1]
-
-	switch primary {
-	case "tasks":
-		t := opts.Tasks
-		if t == nil {
-			return
-		}
-		if subcmd != "list" {
-			t.List = nil
-		}
-		if subcmd != "find" {
-			t.Find = nil
-		}
-		if subcmd != "stop" {
-			t.Stop = nil
-		}
-		if subcmd != "trace" {
-			t.Trace = nil
-		}
-		if subcmd != "logs" {
-			t.Logs = nil
-		}
-	case "exec":
-		e := opts.Exec
-		if e == nil {
-			return
-		}
-		if subcmd != "run" {
-			e.Run = nil
-		}
-		if subcmd != "portforward" {
-			e.Portforward = nil
-		}
-		if subcmd != "cp" {
-			e.Cp = nil
-		}
-	case "skills":
-		s := opts.Skills
-		if s == nil {
-			return
-		}
-		if subcmd != "list" {
-			s.List = nil
-		}
-		if subcmd != "install" {
-			s.Install = nil
-		}
-		if subcmd != "update" {
-			s.Update = nil
-		}
-		if subcmd != "reinstall" {
-			s.Reinstall = nil
-		}
-		if subcmd != "uninstall" {
-			s.Uninstall = nil
-		}
-		if subcmd != "status" {
-			s.Status = nil
+	defer f.Close()
+	envs, err := envparse.Parse(f)
+	if err != nil {
+		return err
+	}
+	for k, v := range envs {
+		if err := os.Setenv(k, v); err != nil {
+			return err
 		}
 	}
+	return nil
 }

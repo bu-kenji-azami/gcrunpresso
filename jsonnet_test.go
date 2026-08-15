@@ -1,4 +1,4 @@
-package ecspresso_test
+package gcrunpresso_test
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-jsonnet"
-	"github.com/kayac/ecspresso/v2"
+	"github.com/kayac/gcrunpresso/v2"
 )
 
 var testSrcJsonnet = `
@@ -56,7 +56,7 @@ var testCaseJsonnetNativeFuncs = []struct {
 
 func TestJsonnetNativeFuncs(t *testing.T) {
 	vm := jsonnet.MakeVM()
-	for _, f := range ecspresso.DefaultJsonnetNativeFuncs() {
+	for _, f := range gcrunpresso.DefaultJsonnetNativeFuncs() {
 		vm.NativeFunction(f)
 	}
 

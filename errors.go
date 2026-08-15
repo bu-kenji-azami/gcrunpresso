@@ -1,9 +1,12 @@
-package ecspresso
+package gcrunpresso
 
 import (
 	"errors"
+	"net/http"
 
-	"github.com/aws/smithy-go"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ErrSkipVerify string
@@ -37,20 +40,29 @@ var (
 )
 
 func isPermissionError(err error) bool {
-	// Check if it's wrapped in OperationError
-	var oe *smithy.OperationError
-	if errors.As(err, &oe) {
-		err = oe.Err
+	if err == nil {
+		return false
 	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.PermissionDenied || st.Code() == codes.Unauthenticated
+	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		return gErr.Code == http.StatusForbidden || gErr.Code == http.StatusUnauthorized
+	}
+	return false
+}
 
-	// Check the actual API error
-	var ae smithy.APIError
-	if errors.As(err, &ae) {
-		switch ae.ErrorCode() {
-		case "AccessDeniedException", "UnauthorizedException",
-			"Forbidden", "AccessDenied", "InvalidUserID.NotFound":
-			return true
-		}
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.NotFound
+	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		return gErr.Code == http.StatusNotFound
 	}
 	return false
 }

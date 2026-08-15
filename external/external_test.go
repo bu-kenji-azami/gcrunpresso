@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kayac/ecspresso/v2/external"
+	"github.com/kayac/gcrunpresso/v2/external"
 )
 
 func TestExternalPlugin(t *testing.T) {

@@ -6,19 +6,19 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/kayac/ecspresso/v2"
+	"github.com/kayac/gcrunpresso/v2"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), trapSignals...)
 	defer stop()
 
-	exitCode, err := ecspresso.CLI(ctx, ecspresso.ParseCLIv2)
+	exitCode, err := gcrunpresso.CLI(ctx, gcrunpresso.ParseCLIv2)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			ecspresso.LogWarn("Interrupted")
+			gcrunpresso.LogWarn("Interrupted")
 		} else {
-			ecspresso.LogError("FAILED. %s", err)
+			gcrunpresso.LogError("FAILED. %s", err)
 		}
 	}
 	os.Exit(exitCode)

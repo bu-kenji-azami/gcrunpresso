@@ -1,17 +1,17 @@
 version: 2.1
 
-description: "orb for ecspresso"
+description: "orb for gcrunpresso"
 
 commands:
   install:
-    description: "install ecspresso"
+    description: "install gcrunpresso"
     parameters:
       version:
-        description: ecspresso version
+        description: gcrunpresso version
         type: string
         default: latest
       version-file:
-        description: "File containing the ecspresso version. Example: .ecspresso-version"
+        description: "File containing the gcrunpresso version. Example: .gcrunpresso-version"
         type: string
         default: ""
       os:
@@ -24,7 +24,7 @@ commands:
         default: "amd64"
     steps:
       - run:
-          name: "Install ecspresso"
+          name: "Install gcrunpresso"
           shell: bash
           command: |
             set -euo pipefail
@@ -35,34 +35,34 @@ commands:
             DOWNLOAD_OS="<< parameters.os >>"
             DOWNLOAD_ARCH="<< parameters.arch >>"
             if [ "${VERSION}" = "latest" ]; then
-              DOWNLOAD_URL=$(curl -sSf --retry 3 https://api.github.com/repos/kayac/ecspresso/releases | jq --arg arch ${DOWNLOAD_OS}.${DOWNLOAD_ARCH}. -r '[.[]|select(.tag_name > "v2.0")|select(.prerelease==false)][0].assets[].browser_download_url|select(match($arch))')
+              DOWNLOAD_URL=$(curl -sSf --retry 3 https://api.github.com/repos/kayac/gcrunpresso/releases | jq --arg arch ${DOWNLOAD_OS}.${DOWNLOAD_ARCH}. -r '[.[]|select(.tag_name > "v2.0")|select(.prerelease==false)][0].assets[].browser_download_url|select(match($arch))')
             else
-              DOWNLOAD_URL=https://github.com/kayac/ecspresso/releases/download/${VERSION}/ecspresso_${VERSION:1}_${DOWNLOAD_OS}_${DOWNLOAD_ARCH}.tar.gz
+              DOWNLOAD_URL=https://github.com/kayac/gcrunpresso/releases/download/${VERSION}/gcrunpresso_${VERSION:1}_${DOWNLOAD_OS}_${DOWNLOAD_ARCH}.tar.gz
             fi
             cd /tmp
             curl -sSfLO --retry 3 ${DOWNLOAD_URL}
             if [[ "${DOWNLOAD_URL}" =~ \.tar\.gz$ ]]; then
               FILENAME=$(basename $DOWNLOAD_URL .tar.gz)
               tar xzvf ${FILENAME}.tar.gz
-              sudo install ecspresso /usr/local/bin/ecspresso
+              sudo install gcrunpresso /usr/local/bin/gcrunpresso
             elif [[ "${DOWNLOAD_URL}" =~ \.zip$ ]]; then
               FILENAME=$(basename $DOWNLOAD_URL .zip)
               unzip ${FILENAME}.zip
-              sudo install ${FILENAME} /usr/local/bin/ecspresso
+              sudo install ${FILENAME} /usr/local/bin/gcrunpresso
             fi
 
 examples:
-  install_ecspresso:
-    description: Easily install ecspresso command
+  install_gcrunpresso:
+    description: Easily install gcrunpresso command
     usage:
       version: 2.1
       orbs:
-        ecspresso: fujiwara/ecspresso@x.y
+        gcrunpresso: fujiwara/gcrunpresso@x.y
         jobs:
-          ecspresso_example:
+          gcrunpresso_example:
           steps:
             - checkout
-            - ecspresso/install
+            - gcrunpresso/install
             - run:
                 command: |
-                  ecspresso deploy --config ecspresso.yml
+                  gcrunpresso deploy --config gcrunpresso.yml

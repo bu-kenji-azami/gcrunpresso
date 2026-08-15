@@ -1,29 +1,17 @@
-package ecspresso
+package gcrunpresso
+
+import (
+	"context"
+)
 
 type ScaleOption struct {
-	DryRun             bool   `help:"dry run" default:"false"`
-	DesiredCount       *int32 `name:"tasks" help:"desired count of tasks" default:"-1"`
-	Wait               bool   `help:"wait for service stable" default:"true" negatable:""`
-	SuspendAutoScaling *bool  `help:"suspend application auto-scaling attached with the ECS service"`
-	ResumeAutoScaling  *bool  `help:"resume application auto-scaling attached with the ECS service"`
-	AutoScalingMin     *int32 `help:"set minimum capacity of application auto-scaling attached with the ECS service"`
-	AutoScalingMax     *int32 `help:"set maximum capacity of application auto-scaling attached with the ECS service"`
+	Min       *int32 `help:"min instances"`
+	Max       *int32 `help:"max instances"`
+	NoTraffic bool   `help:"do not route traffic to new revision" default:"false"`
+	DryRun    bool   `help:"dry run" default:"false"`
 }
 
-func (o *ScaleOption) DeployOption() DeployOption {
-	return DeployOption{
-		DesiredCount:         o.DesiredCount,
-		DryRun:               o.DryRun,
-		SkipTaskDefinition:   true,
-		ForceNewDeployment:   false,
-		Wait:                 o.Wait,
-		WaitUntil:            string(waitUntilStable),
-		RollbackEvents:       "",
-		UpdateService:        false,
-		LatestTaskDefinition: false,
-		SuspendAutoScaling:   o.SuspendAutoScaling,
-		ResumeAutoScaling:    o.ResumeAutoScaling,
-		AutoScalingMin:       o.AutoScalingMin,
-		AutoScalingMax:       o.AutoScalingMax,
-	}
+func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
+	d.LogInfo("scale command called", withDryRun(opt.DryRun)...)
+	return nil
 }

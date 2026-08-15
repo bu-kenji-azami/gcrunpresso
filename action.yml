@@ -1,17 +1,17 @@
 inputs:
   version:
-    description: "A version to install ecspresso"
+    description: "A version to install gcrunpresso"
     default: latest
     required: false
   version-file:
-    description: "File containing the ecspresso version. Example: .ecspresso-version"
+    description: "File containing the gcrunpresso version. Example: .gcrunpresso-version"
     required: false
   github-token:
     description: "The token used when calling GitHub API"
     required: false
     default: ${{ github.token }}
   args:
-    description: "Arguments to pass to ecspresso"
+    description: "Arguments to pass to gcrunpresso"
     required: false
     default: ""
 runs:
@@ -44,35 +44,35 @@ runs:
           api_request_args=("${api_request_args[@]}" -H "authorization: token $github_token")
         fi
         if [ "${VERSION}" = "latest" ]; then
-          DOWNLOAD_URL=$(curl "${api_request_args[@]}" https://api.github.com/repos/kayac/ecspresso/releases \
+          DOWNLOAD_URL=$(curl "${api_request_args[@]}" https://api.github.com/repos/kayac/gcrunpresso/releases \
             | jq --arg matcher "linux.${GOARCH}." -r '[.[]?|select(.tag_name? > "v2.0")|select(.draft==false)|select(.prerelease==false)][0].assets[]?.browser_download_url|select(match($matcher))')
           if [ -z "${DOWNLOAD_URL}" ]; then
             echo "No matching release asset found for linux/${GOARCH}"
             exit 1
           fi
         else
-          DOWNLOAD_URL=https://github.com/kayac/ecspresso/releases/download/${VERSION}/ecspresso_${VERSION:1}_linux_${GOARCH}.tar.gz
+          DOWNLOAD_URL=https://github.com/kayac/gcrunpresso/releases/download/${VERSION}/gcrunpresso_${VERSION:1}_linux_${GOARCH}.tar.gz
         fi
         echo "DOWNLOAD_URL=${DOWNLOAD_URL}"
-        mkdir -p ${RUNNER_TOOL_CACHE}/ecspresso
+        mkdir -p ${RUNNER_TOOL_CACHE}/gcrunpresso
         cd /tmp
         curl -sfLO --retry 3 ${DOWNLOAD_URL}
         if [[ "${DOWNLOAD_URL}" =~ \.tar\.gz$ ]]; then
           FILENAME=$(basename $DOWNLOAD_URL .tar.gz)
           tar xzvf ${FILENAME}.tar.gz
-          sudo install ecspresso ${RUNNER_TOOL_CACHE}/ecspresso/ecspresso
+          sudo install gcrunpresso ${RUNNER_TOOL_CACHE}/gcrunpresso/gcrunpresso
         elif [[ "${DOWNLOAD_URL}" =~ \.zip$ ]]; then
           FILENAME=$(basename $DOWNLOAD_URL .zip)
           unzip ${FILENAME}.zip
-          sudo install ${FILENAME} ${RUNNER_TOOL_CACHE}/ecspresso/ecspresso
+          sudo install ${FILENAME} ${RUNNER_TOOL_CACHE}/gcrunpresso/gcrunpresso
         fi
 
-        echo "Adding ${RUNNER_TOOL_CACHE}/ecspresso to path..."
-        echo "${RUNNER_TOOL_CACHE}/ecspresso" >> $GITHUB_PATH
-        "${RUNNER_TOOL_CACHE}/ecspresso/ecspresso" version
-    - name: Run ecspresso with args
+        echo "Adding ${RUNNER_TOOL_CACHE}/gcrunpresso to path..."
+        echo "${RUNNER_TOOL_CACHE}/gcrunpresso" >> $GITHUB_PATH
+        "${RUNNER_TOOL_CACHE}/gcrunpresso/gcrunpresso" version
+    - name: Run gcrunpresso with args
       shell: bash
       run: |
         set -e
-        ecspresso ${{ inputs.args }}
+        gcrunpresso ${{ inputs.args }}
       if: ${{ inputs.args != '' }}

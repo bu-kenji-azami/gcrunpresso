@@ -1,4 +1,4 @@
-package ecspresso
+package gcrunpresso
 
-// Version is the released version of ecspresso. Managed by tagpr.
-var Version = "v2.8.5"
+// Version is the released version of gcrunpresso. Managed by tagpr.
+var Version = "v0.1.0"
