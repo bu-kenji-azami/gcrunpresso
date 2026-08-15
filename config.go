@@ -8,6 +8,7 @@ import (
 	"text/template"
 	"time"
 
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/google/go-jsonnet"
 	"github.com/google/go-jsonnet/ast"
 	"github.com/goccy/go-yaml"
@@ -18,6 +19,8 @@ const (
 	defaultTimeout = 10 * time.Minute
 	jsonnetExt     = ".jsonnet"
 )
+
+var definitionFileExtensions = []string{".yaml", ".yml", ".json", ".jsonnet"}
 
 type Config struct {
 	Project                   string          `yaml:"project" json:"project"`
@@ -99,6 +102,21 @@ func newConfigLoader() *configLoader {
 			return "", nil
 		},
 	})
+	cl.VM.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "must_env",
+		Params: []ast.Identifier{"key"},
+		Func: func(args []any) (any, error) {
+			key, ok := args[0].(string)
+			if !ok {
+				return nil, fmt.Errorf("must_env: key must be a string")
+			}
+			val, ok := os.LookupEnv(key)
+			if !ok || val == "" {
+				return nil, fmt.Errorf("must_env: %s is not set", key)
+			}
+			return val, nil
+		},
+	})
 	return cl
 }
 
@@ -171,5 +189,75 @@ func (c *Config) Restrict(opt *Option) error {
 		return fmt.Errorf("either service or job is required")
 	}
 
+	// Auto-resolve definition paths if not set
+	if c.Service != "" && c.ServiceDefinitionPath == "" {
+		for _, ext := range definitionFileExtensions {
+			p := filepath.Join(c.dir, "service"+ext)
+			if _, err := os.Stat(p); err == nil {
+				c.ServiceDefinitionPath = p
+				break
+			}
+		}
+	}
+	if c.Job != "" && c.JobDefinitionPath == "" {
+		for _, ext := range definitionFileExtensions {
+			p := filepath.Join(c.dir, "job"+ext)
+			if _, err := os.Stat(p); err == nil {
+				c.JobDefinitionPath = p
+				break
+			}
+		}
+	}
+
 	return nil
+}
+
+// LoadServiceDefinition loads and parses a Cloud Run Service definition file.
+func (d *App) LoadServiceDefinition(path string) (*runpb.Service, error) {
+	if path == "" {
+		path = d.config.ServiceDefinitionPath
+	}
+	if path == "" {
+		return nil, fmt.Errorf("service definition path is not set")
+	}
+	if !filepath.IsAbs(path) && d.config.dir != "" {
+		path = filepath.Join(d.config.dir, path)
+	}
+
+	b, err := d.readDefinitionFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read service definition file %s: %w", path, err)
+	}
+
+	var svc runpb.Service
+	if err := UnmarshalService(b, &svc, false); err != nil {
+		return nil, fmt.Errorf("failed to parse service definition %s: %w", path, err)
+	}
+
+	return &svc, nil
+}
+
+// LoadJobDefinition loads and parses a Cloud Run Job definition file.
+func (d *App) LoadJobDefinition(path string) (*runpb.Job, error) {
+	if path == "" {
+		path = d.config.JobDefinitionPath
+	}
+	if path == "" {
+		return nil, fmt.Errorf("job definition path is not set")
+	}
+	if !filepath.IsAbs(path) && d.config.dir != "" {
+		path = filepath.Join(d.config.dir, path)
+	}
+
+	b, err := d.readDefinitionFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read job definition file %s: %w", path, err)
+	}
+
+	var job runpb.Job
+	if err := UnmarshalJob(b, &job, false); err != nil {
+		return nil, fmt.Errorf("failed to parse job definition %s: %w", path, err)
+	}
+
+	return &job, nil
 }
