@@ -90,6 +90,9 @@ func dispatchApp(ctx context.Context, sub string, usage func(), opts *CLIOptions
 	if opts.Timeout != nil {
 		appOpt.Timeout = *opts.Timeout
 	}
+	if sub == "init" {
+		appOpt.ConfigFilePath = ""
+	}
 
 	app, err := New(ctx, appOpt)
 	if err != nil {
