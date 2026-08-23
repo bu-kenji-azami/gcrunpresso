@@ -56,12 +56,22 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 		Template: template,
 	}
 
-	// Traffic handling: scale only adjusts instance scaling and should never accidentally promote traffic
+	// Traffic handling: scale only adjusts instance scaling and should never accidentally
+	// promote traffic. Note that preserving the table verbatim does NOT hold traffic still
+	// if it contains a LATEST target -- LATEST resolves to the newly created revision.
 	isPinned := false
+	hasLatest := false
 	for _, t := range remoteSvc.Traffic {
-		if t != nil && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION && t.Revision != "" {
-			isPinned = true
-			break
+		if t == nil {
+			continue
+		}
+		switch t.Type {
+		case runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION:
+			if t.Revision != "" {
+				isPinned = true
+			}
+		case runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST:
+			hasLatest = true
 		}
 	}
 
@@ -70,7 +80,9 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 			svcUpdate.Traffic = remoteSvc.Traffic
 			updateMaskPaths = append(updateMaskPaths, "traffic")
 		}
-		if isPinned {
+		if isPinned && hasLatest {
+			d.LogWarn("remote service traffic mixes pinned revisions with a LATEST target; the revision-pinned share is preserved, but the LATEST share will move to the newly created revision. Use deploy --traffic to control routing explicitly")
+		} else if isPinned {
 			d.LogWarn("remote service traffic is pinned to specific revision(s); scaling applied to new revision but traffic allocation is preserved and not shifted to latest")
 		}
 	}
@@ -101,7 +113,9 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 	if err != nil {
 		return err
 	}
-	if isPinned {
+	if isPinned && hasLatest {
+		d.LogInfo("service scaling updated for new revision (note: the LATEST share of traffic now points at this new revision; use deploy --traffic to control routing)", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
+	} else if isPinned {
 		d.LogInfo("service scaling updated for new revision (note: traffic remains pinned to existing revision; use deploy or rollback to adjust traffic)", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
 	} else {
 		d.LogInfo("service scaled successfully", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)

@@ -32,6 +32,20 @@ func (d *App) Init(ctx context.Context, opt InitOption) error {
 	return fmt.Errorf("either service or job must be specified to init")
 }
 
+// writeDefinitionFile writes a generated definition or config file with owner-only
+// permissions. os.WriteFile applies its mode only when it creates the file, so an
+// overwrite under --force would otherwise keep a pre-existing world-readable mode --
+// and these files can contain plaintext values copied from the remote resource.
+func writeDefinitionFile(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to write %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("failed to set permissions on %s: %w", path, err)
+	}
+	return nil
+}
+
 func (d *App) initService(ctx context.Context, opt InitOption) error {
 	remoteSvc, err := d.servicesClient.GetService(ctx, &runpb.GetServiceRequest{
 		Name: d.ResourceServicePath(),
@@ -57,8 +71,8 @@ func (d *App) initService(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", svcFilePath)
 		}
 	}
-	if err := os.WriteFile(svcFilePath, svcYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", svcFilePath, err)
+	if err := writeDefinitionFile(svcFilePath, svcYAML); err != nil {
+		return err
 	}
 	d.LogInfo("wrote service definition", "file", svcFilePath)
 
@@ -79,8 +93,8 @@ func (d *App) initService(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", cfgFilePath)
 		}
 	}
-	if err := os.WriteFile(cfgFilePath, cfgYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", cfgFilePath, err)
+	if err := writeDefinitionFile(cfgFilePath, cfgYAML); err != nil {
+		return err
 	}
 	d.LogInfo("wrote gcrunpresso config", "file", cfgFilePath)
 
@@ -112,8 +126,8 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", jobFilePath)
 		}
 	}
-	if err := os.WriteFile(jobFilePath, jobYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", jobFilePath, err)
+	if err := writeDefinitionFile(jobFilePath, jobYAML); err != nil {
+		return err
 	}
 	d.LogInfo("wrote job definition", "file", jobFilePath)
 
@@ -134,8 +148,8 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", cfgFilePath)
 		}
 	}
-	if err := os.WriteFile(cfgFilePath, cfgYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", cfgFilePath, err)
+	if err := writeDefinitionFile(cfgFilePath, cfgYAML); err != nil {
+		return err
 	}
 	d.LogInfo("wrote gcrunpresso config", "file", cfgFilePath)
 

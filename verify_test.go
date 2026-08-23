@@ -1,7 +1,9 @@
 package gcrunpresso_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -90,8 +92,11 @@ func (m *mockSecretManagerAPI) GetSecret(ctx context.Context, req *secretmanager
 }
 
 type mockArtifactRegistryAPI struct {
-	permDenied           bool
+	permDenied bool
+	// notFound makes GetRepository 404. imageNotFound makes only GetDockerImage 404,
+	// so the image-not-found branch can be reached with the repository present.
 	notFound             bool
+	imageNotFound        bool
 	calledGetDockerImage bool
 }
 
@@ -107,6 +112,9 @@ func (m *mockArtifactRegistryAPI) GetRepository(ctx context.Context, req *artifa
 
 func (m *mockArtifactRegistryAPI) GetDockerImage(ctx context.Context, req *artifactregistrypb.GetDockerImageRequest, opts ...gax.CallOption) (*artifactregistrypb.DockerImage, error) {
 	m.calledGetDockerImage = true
+	if m.imageNotFound {
+		return nil, status.Error(codes.NotFound, "image not found")
+	}
 	if m.permDenied {
 		return nil, status.Error(codes.PermissionDenied, "permission denied")
 	}
@@ -249,12 +257,35 @@ service_definition: service.yaml
 	}
 	defer app.Close()
 
-	// Tag without digest is reported as [SKIP] and does not fail verification
+	// Tag without digest is reported as [SKIP] and does not fail verification.
+	// Assert the emitted status, not just a nil error -- Verify also returns nil for OK,
+	// so a regression from ErrSkipVerify to nil would otherwise go unnoticed.
+	var buf bytes.Buffer
+	restore := gcrunpresso.SetJSONWriter(&buf)
 	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
 		Image: true,
+		JSON:  true,
 	})
+	restore()
 	if err != nil {
 		t.Fatalf("expected Verify to succeed (tag treated as skip), but got error: %v", err)
+	}
+
+	var items []struct {
+		Target string `json:"target"`
+		Status string `json:"status"`
+	}
+	if uerr := json.Unmarshal(buf.Bytes(), &items); uerr != nil {
+		t.Fatalf("failed to unmarshal verify --json output: %v (raw: %s)", uerr, buf.String())
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 verify result, got %d (raw: %s)", len(items), buf.String())
+	}
+	if items[0].Status != "SKIP" {
+		t.Errorf("expected tag reference to be SKIP, got %q", items[0].Status)
+	}
+	if mockAR.calledGetDockerImage {
+		t.Error("expected GetDockerImage NOT to be called for a tag reference")
 	}
 }
 
@@ -282,7 +313,10 @@ service_definition: service.yaml
 		t.Fatal(err)
 	}
 
-	mockAR := &mockArtifactRegistryAPI{notFound: true}
+	// Repository exists; only the specific digest is missing, so verifyImage must
+	// reach GetDockerImage and treat NotFound as a failure rather than falling back
+	// to the repository-existence check.
+	mockAR := &mockArtifactRegistryAPI{imageNotFound: true}
 	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
 		ConfigFilePath: configPath,
 	},
@@ -296,6 +330,9 @@ service_definition: service.yaml
 	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
 		Image: true,
 	})
+	if !mockAR.calledGetDockerImage {
+		t.Error("expected GetDockerImage to be called so the image-not-found branch is exercised")
+	}
 	if err == nil {
 		t.Fatal("expected Verify to fail for non-existent image, got nil")
 	}

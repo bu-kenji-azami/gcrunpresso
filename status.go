@@ -304,7 +304,10 @@ func formatConditionState(state runpb.Condition_State) string {
 		return "FAILED"
 	case runpb.Condition_CONDITION_PENDING:
 		return "PENDING"
+	case runpb.Condition_CONDITION_RECONCILING:
+		return "RECONCILING"
 	default:
+		// STATE_UNSPECIFIED and any enum value added in a future API revision
 		return "UNKNOWN"
 	}
 }

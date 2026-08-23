@@ -422,7 +422,7 @@ func resolveExecutionPath(ctx context.Context, op *run.RunJobOperation, jobResou
 		}
 	}()
 
-	if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+	if md, err := op.Metadata(); err == nil && md != nil && strings.Contains(md.Name, "/executions/") {
 		return md.Name, nil
 	}
 
@@ -448,11 +448,11 @@ func resolveExecutionPath(ctx context.Context, op *run.RunJobOperation, jobResou
 			}
 			return fmt.Sprintf("%s/executions", jobResourcePath), nil
 		case <-ticker.C:
-			if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+			if md, err := op.Metadata(); err == nil && md != nil && strings.Contains(md.Name, "/executions/") {
 				return md.Name, nil
 			}
 			if _, err := op.Poll(pollCtx); err == nil {
-				if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+				if md, err := op.Metadata(); err == nil && md != nil && strings.Contains(md.Name, "/executions/") {
 					return md.Name, nil
 				}
 			}

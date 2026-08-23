@@ -90,6 +90,8 @@ func printJSONTo(w io.Writer, v any) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	_, err = fmt.Fprintln(w, string(b))
-	return err
+	if _, err := fmt.Fprintln(w, string(b)); err != nil {
+		return fmt.Errorf("failed to write JSON output: %w", err)
+	}
+	return nil
 }

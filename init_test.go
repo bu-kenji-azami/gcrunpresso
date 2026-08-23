@@ -176,6 +176,48 @@ func TestInitServiceFileMode0600(t *testing.T) {
 	}
 }
 
+// os.WriteFile applies its mode only when it CREATES the file, so overwriting an
+// existing world-readable definition under --force would silently keep 0644.
+func TestInitServiceForceOverwriteTightensFileMode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	svcPath := filepath.Join(tmpDir, "service.yaml")
+	cfgPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	for _, p := range []string{svcPath, cfgPath} {
+		if err := os.WriteFile(p, []byte("stale: true\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "test-project",
+		Location: "asia-northeast1",
+		Service:  "test-svc",
+	},
+		gcrunpresso.WithServicesClient(&mockInitServicesAPI{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	if err := app.Init(t.Context(), gcrunpresso.InitOption{Dir: tmpDir, Force: true}); err != nil {
+		t.Fatalf("unexpected error during init --force: %v", err)
+	}
+
+	for _, p := range []string{svcPath, cfgPath} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatalf("failed to stat %s: %v", p, err)
+		}
+		if perm := fi.Mode().Perm(); perm != 0600 {
+			t.Errorf("expected %s mode 0600 after --force overwrite, got %o", filepath.Base(p), perm)
+		}
+	}
+}
+
 func TestInitJobFileMode0600(t *testing.T) {
 	tmpDir := t.TempDir()
 
