@@ -5,6 +5,7 @@ import (
 
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/kayac/gcrunpresso/v2"
+	api "google.golang.org/genproto/googleapis/api"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -139,10 +140,10 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 		{
 			name: "LaunchStage",
 			remote: &runpb.Job{
-				LaunchStage: 1, // ALPHA / BETA
+				LaunchStage: api.LaunchStage_BETA,
 			},
 			localOmit:  &runpb.Job{},
-			localMatch: &runpb.Job{LaunchStage: 1},
+			localMatch: &runpb.Job{LaunchStage: api.LaunchStage_BETA},
 		},
 		{
 			name: "ExecutionTemplate.Labels",
@@ -308,6 +309,24 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Volumes",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						Volumes: []*runpb.Volume{{Name: "secrets"}},
+					},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						Volumes: []*runpb.Volume{{Name: "secrets"}},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -322,5 +341,17 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 				t.Fatalf("unexpected error when %s is specified in local manifest: %v", tc.name, err)
 			}
 		})
+	}
+}
+
+// Cloud Run assumes GA when launch_stage is unset and reports the effective stage on
+// read, so an ordinary job reads back as GA. Omitting launch_stage from job.yaml is the
+// normal case and must not trip the safety guard.
+func TestValidateJobSafetyGuardsGALaunchStageIsNotAViolation(t *testing.T) {
+	remote := &runpb.Job{LaunchStage: api.LaunchStage_GA}
+	local := &runpb.Job{}
+
+	if err := gcrunpresso.ValidateJobSafetyGuards(remote, local); err != nil {
+		t.Errorf("GA launch_stage omitted locally must not trip the guard, got: %v", err)
 	}
 }

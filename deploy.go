@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/run/apiv2/runpb"
+	api "google.golang.org/genproto/googleapis/api"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -249,8 +250,11 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 		return fmt.Errorf("safety guard violation: remote Job has annotations configured, but rendered manifest omits 'annotations'. Please declare annotations in job.yaml to prevent metadata reset")
 	}
 
-	// 4. LaunchStage
-	if remote.LaunchStage != 0 && local.LaunchStage == 0 {
+	// 4. LaunchStage -- only preview stages are worth guarding. Cloud Run assumes GA
+	// when unset and reports the resource's effective stage on read, so an ordinary
+	// job reads back as GA; comparing against "not unspecified" would fire on every
+	// deploy whose manifest omits launch_stage.
+	if isPreviewLaunchStage(remote.LaunchStage) && local.LaunchStage == 0 {
 		return fmt.Errorf("safety guard violation: remote Job has launch_stage configured (%s), but rendered manifest omits 'launch_stage'. Please declare launch_stage in job.yaml to prevent preview feature reset", remote.LaunchStage)
 	}
 
@@ -327,10 +331,29 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 			if remTask.GpuZonalRedundancyDisabled != nil && locTask.GpuZonalRedundancyDisabled == nil {
 				return fmt.Errorf("safety guard violation: remote Job has gpu_zonal_redundancy_disabled configured, but rendered manifest omits 'template.template.gpu_zonal_redundancy_disabled'")
 			}
+
+			// 17. Volumes
+			if len(remTask.Volumes) > 0 && len(locTask.Volumes) == 0 {
+				return fmt.Errorf("safety guard violation: remote Job has volumes configured, but rendered manifest omits 'template.template.volumes'. Please declare volumes in job.yaml to prevent mount and secret volume reset")
+			}
 		}
 	}
 
 	return nil
+}
+
+// isPreviewLaunchStage reports whether stage is a pre-GA stage that unlocks preview
+// features. GA and LAUNCH_STAGE_UNSPECIFIED are not preview stages: Cloud Run assumes
+// GA when launch_stage is unset, so treating GA as "configured" would make the
+// launch_stage safety guard fire on every ordinary deploy.
+func isPreviewLaunchStage(stage api.LaunchStage) bool {
+	switch stage {
+	case api.LaunchStage_PRELAUNCH, api.LaunchStage_EARLY_ACCESS,
+		api.LaunchStage_ALPHA, api.LaunchStage_BETA:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateServiceSafetyGuards(remote, local *runpb.Service) error {

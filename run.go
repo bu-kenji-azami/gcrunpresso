@@ -127,7 +127,12 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 
 	// Stop log streaming with safe drain window derived from root ctx (N6, #31)
 	if opt.Follow {
+		// Give trailing entries a moment to arrive before tearing the stream down --
+		// a failed execution's last lines carry the reason it failed. sleepContext
+		// keeps Ctrl-C responsive.
+		sleepContext(ctx, 3*time.Second)
 		cancelLogStream()
+
 		drainDone := make(chan struct{})
 		go func() {
 			wg.Wait()
@@ -138,6 +143,13 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 		case <-time.After(30 * time.Second):
 			d.LogWarn("log streaming drain window timed out after 30s")
 		case <-ctx.Done():
+			// Still join, briefly, so the streaming goroutine is not abandoned
+			// mid-write on interrupt.
+			select {
+			case <-drainDone:
+			case <-time.After(2 * time.Second):
+				d.LogWarn("abandoned log streaming drain after interrupt")
+			}
 		case <-drainDone:
 		}
 	} else {
@@ -236,11 +248,18 @@ func BuildJobOverrides(opt RunOption) (*runpb.RunJobRequest_Overrides, error) {
 	return overrides, nil
 }
 
+// maxNotFoundPolls bounds how long monitorExecution tolerates a NotFound execution
+// before concluding the resolved path is wrong. At the 3s poll interval this is ~15s,
+// enough to absorb post-RunJob eventual consistency without burning the full timeout.
+const maxNotFoundPolls = 5
+
 func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
 	d.LogInfo("monitoring job execution status", "path", execPath)
+
+	notFoundPolls := 0
 
 	for {
 		select {
@@ -255,9 +274,20 @@ func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 				if isPermissionError(err) {
 					return fmt.Errorf("fatal authentication or permission error polling execution %s: %w", execPath, err)
 				}
+				// A freshly triggered execution can briefly 404, but a path that stays
+				// NotFound is wrong and would otherwise burn the whole timeout.
+				if isNotFoundError(err) {
+					notFoundPolls++
+					if notFoundPolls >= maxNotFoundPolls {
+						return fmt.Errorf("execution %s not found after %d polls, the resolved execution path may be wrong: %w", execPath, notFoundPolls, err)
+					}
+				} else {
+					notFoundPolls = 0
+				}
 				d.LogWarn("failed to poll execution status, retrying", "error", err)
 				continue
 			}
+			notFoundPolls = 0
 
 			// Check conditions
 			if !exec.Reconciling {

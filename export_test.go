@@ -15,6 +15,7 @@ var (
 	Map2str                 = map2str
 	ParseLabels             = parseLabels
 	ValidateJobSafetyGuards = validateJobSafetyGuards
+	ExitCodeFromError       = exitCodeFromError
 )
 
 func (d *App) SetLogger(logger *slog.Logger) {

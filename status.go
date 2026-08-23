@@ -169,7 +169,7 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 		fmt.Println()
 		bold.Println("Recent Events:")
 		for _, ev := range result.RecentEvents {
-			fmt.Printf("  %s\n", ev)
+			fmt.Printf("  %s [%s] %s\n", ev.Timestamp, ev.Severity, ev.Message)
 		}
 	}
 

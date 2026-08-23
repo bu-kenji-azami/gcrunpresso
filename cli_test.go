@@ -2,6 +2,7 @@ package gcrunpresso_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -183,10 +184,59 @@ func TestParseCLIv2(t *testing.T) {
 		}
 
 		exitCode, err := gcrunpresso.CLI(t.Context(), customParse)
-		if exitCode != 0 && exitCode != 1 {
-			t.Errorf("unexpected exit code: %d, err: %v", exitCode, err)
+		if err == nil {
+			t.Fatal("expected an error for an unknown subcommand, got nil")
+		}
+		if exitCode != 1 {
+			t.Errorf("expected exit code 1 for a tool failure, got %d", exitCode)
 		}
 	})
+}
+
+// The contract `gcrunpresso run` advertises to CI and to agents: a container's exit
+// status reaches the process exit code, while a tool failure is always 1.
+func TestExitCodeFromError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "nil error is success", err: nil, want: 0},
+		{name: "plain error is a tool failure", err: errors.New("boom"), want: 1},
+		{
+			name: "container exit code is propagated",
+			err:  &gcrunpresso.ExitCodeError{Code: 42, Err: errors.New("task failed")},
+			want: 42,
+		},
+		{
+			name: "wrapped ExitCodeError is still propagated",
+			err:  fmt.Errorf("run failed: %w", &gcrunpresso.ExitCodeError{Code: 7}),
+			want: 7,
+		},
+		{
+			name: "highest container code 255 is propagated",
+			err:  &gcrunpresso.ExitCodeError{Code: 255},
+			want: 255,
+		},
+		{
+			name: "zero code with a non-nil error never reports success",
+			err:  &gcrunpresso.ExitCodeError{Code: 0, Err: errors.New("boom")},
+			want: 1,
+		},
+		{
+			name: "out-of-range code is normalized",
+			err:  &gcrunpresso.ExitCodeError{Code: 256},
+			want: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := gcrunpresso.ExitCodeFromError(tc.err); got != tc.want {
+				t.Errorf("ExitCodeFromError(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
 }
 
 func TestJSONSubcommandOutputs(t *testing.T) {

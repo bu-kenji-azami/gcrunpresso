@@ -150,11 +150,24 @@ func CLI(ctx context.Context, parse CLIParseFunc) (int, error) {
 	}
 
 	if err := dispatchCLI(ctx, sub, usage, opts); err != nil {
-		var exitCoder interface{ ExitCode() int }
-		if errors.As(err, &exitCoder) {
-			return exitCoder.ExitCode(), err
-		}
-		return 1, err
+		return exitCodeFromError(err), err
 	}
 	return 0, nil
+}
+
+// exitCodeFromError maps a dispatch error to a process exit code. An error carrying an
+// ExitCode (notably ExitCodeError, which run uses to propagate a container's own exit
+// status) surfaces that code; anything else is a tool failure and exits 1. A zero or
+// out-of-range code is normalized to 1 so a non-nil error never reports success.
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitCoder interface{ ExitCode() int }
+	if errors.As(err, &exitCoder) {
+		if code := exitCoder.ExitCode(); code > 0 && code < 256 {
+			return code
+		}
+	}
+	return 1
 }

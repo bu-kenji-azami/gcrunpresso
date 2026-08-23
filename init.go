@@ -142,9 +142,13 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 	return nil
 }
 
+// sensitiveKeywords are matched as substrings against the env var NAME. Entries must not
+// be prefixes of each other ("PASS" would subsume "PASSWORD" while also matching
+// BYPASS_CACHE; "KEY" already covers "API_KEY"), and PASSWD is spelled out because it is
+// not a substring of PASSWORD.
 var sensitiveKeywords = []string{
-	"SECRET", "PASSWORD", "PASS", "KEY", "TOKEN", "CREDENTIAL", "API_KEY", "AUTH",
-	"DATABASE_URL", "DB_URI", "PRIVATE", "SIGNING",
+	"SECRET", "PASSWORD", "PASSWD", "KEY", "TOKEN", "CREDENTIAL", "AUTH",
+	"DATABASE_URL", "DB_URI", "DSN", "CONNECTION_STRING", "PRIVATE", "SIGNING",
 }
 
 func (d *App) warnPlaintextSecretsInEnv(containerName string, envVars []*runpb.EnvVar) {
