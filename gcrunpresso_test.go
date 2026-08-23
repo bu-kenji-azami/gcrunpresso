@@ -1,7 +1,6 @@
 package gcrunpresso_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 )
 
 func TestAppResourcePaths(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app, err := gcrunpresso.New(ctx, &gcrunpresso.Option{
 		Project:       "my-test-proj",
 		Location:      "asia-northeast1",
@@ -41,7 +40,7 @@ func TestAppResourcePaths(t *testing.T) {
 }
 
 func TestAppTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app, err := gcrunpresso.New(ctx, &gcrunpresso.Option{
 		Project:       "my-test-proj",
 		Location:      "asia-northeast1",
@@ -60,7 +59,7 @@ func TestAppTimeout(t *testing.T) {
 }
 
 func TestAppClientAccessors(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app, err := gcrunpresso.New(ctx, &gcrunpresso.Option{
 		Project:       "my-test-proj",
 		Location:      "asia-northeast1",

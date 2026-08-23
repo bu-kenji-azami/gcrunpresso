@@ -1,7 +1,6 @@
 package gcrunpresso_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -83,7 +82,7 @@ service_definition: service.yaml
 		t.Fatal(err)
 	}
 
-	app, err := gcrunpresso.New(context.Background(), &gcrunpresso.Option{
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
 		ConfigFilePath: configPath,
 	})
 	if err != nil {
@@ -143,7 +142,7 @@ job_definition: job.jsonnet
 		t.Fatal(err)
 	}
 
-	app, err := gcrunpresso.New(context.Background(), &gcrunpresso.Option{
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
 		ConfigFilePath: configPath,
 	})
 	if err != nil {

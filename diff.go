@@ -149,6 +149,8 @@ func CleanRemoteService(remote, local *runpb.Service) *runpb.Service {
 	clone.Creator = ""
 	clone.LastModifier = ""
 	clone.SatisfiesPzs = false
+	clone.TrafficStatuses = nil
+	clone.ThreatDetectionEnabled = false
 
 	if clone.Template != nil {
 		if local != nil && local.Template != nil && local.Template.Revision == "" {
