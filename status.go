@@ -2,7 +2,6 @@ package gcrunpresso
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"text/tabwriter"
@@ -26,7 +25,7 @@ type ServiceStatusResult struct {
 	Scaling               *ScalingResult      `json:"scaling,omitempty"`
 	Traffic               []TrafficItemResult `json:"traffic"`
 	Conditions            []ConditionResult   `json:"conditions"`
-	RecentEvents          []string            `json:"recent_events,omitempty"`
+	RecentEvents          []EventItemResult   `json:"recent_events,omitempty"`
 }
 
 type JobStatusResult struct {
@@ -37,7 +36,13 @@ type JobStatusResult struct {
 	Timeout                string            `json:"timeout,omitempty"`
 	LatestCreatedExecution string            `json:"latest_created_execution,omitempty"`
 	Conditions             []ConditionResult `json:"conditions"`
-	RecentEvents           []string          `json:"recent_events,omitempty"`
+	RecentEvents           []EventItemResult `json:"recent_events,omitempty"`
+}
+
+type EventItemResult struct {
+	Timestamp string `json:"timestamp"`
+	Severity  string `json:"severity,omitempty"`
+	Message   string `json:"message"`
 }
 
 type ScalingResult struct {
@@ -119,12 +124,7 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 	}
 
 	if opt.JSON {
-		b, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(b))
-		return nil
+		return printJSON(result)
 	}
 
 	bold := color.New(color.Bold)
@@ -216,12 +216,7 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 	}
 
 	if opt.JSON {
-		b, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(b))
-		return nil
+		return printJSON(result)
 	}
 
 	bold := color.New(color.Bold)
@@ -263,7 +258,7 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 		fmt.Println()
 		bold.Println("Recent Events:")
 		for _, ev := range result.RecentEvents {
-			fmt.Printf("  %s\n", ev)
+			fmt.Printf("  %s [%s] %s\n", ev.Timestamp, ev.Severity, ev.Message)
 		}
 	}
 
@@ -276,12 +271,12 @@ const recentEventsLimit = 10
 // fetchRecentEvents returns up to limit of the most recent log entries matching filter.
 // Entries are requested newest-first; logadmin lists oldest-to-newest by default, which
 // would otherwise surface the oldest entries in the log rather than the recent ones.
-func (d *App) fetchRecentEvents(ctx context.Context, filter string, limit int) []string {
+func (d *App) fetchRecentEvents(ctx context.Context, filter string, limit int) []EventItemResult {
 	if d.logAdminClient == nil {
 		return nil
 	}
 	it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter), logadmin.NewestFirst())
-	var events []string
+	var events []EventItemResult
 	for len(events) < limit {
 		entry, err := it.Next()
 		if err == iterator.Done {
@@ -291,7 +286,12 @@ func (d *App) fetchRecentEvents(ctx context.Context, filter string, limit int) [
 			d.LogWarn("failed to fetch recent events", "error", err)
 			break
 		}
-		events = append(events, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
+		msg := fmt.Sprintf("%v", entry.Payload)
+		events = append(events, EventItemResult{
+			Timestamp: entry.Timestamp.Format("15:04:05"),
+			Severity:  entry.Severity.String(),
+			Message:   msg,
+		})
 	}
 	return events
 }

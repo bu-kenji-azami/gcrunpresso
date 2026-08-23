@@ -249,18 +249,33 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 		return fmt.Errorf("safety guard violation: remote Job has annotations configured, but rendered manifest omits 'annotations'. Please declare annotations in job.yaml to prevent metadata reset")
 	}
 
+	// 4. LaunchStage
+	if remote.LaunchStage != 0 && local.LaunchStage == 0 {
+		return fmt.Errorf("safety guard violation: remote Job has launch_stage configured (%s), but rendered manifest omits 'launch_stage'. Please declare launch_stage in job.yaml to prevent preview feature reset", remote.LaunchStage)
+	}
+
 	if remote.Template != nil {
 		locExec := local.Template
 		if locExec == nil {
 			locExec = &runpb.ExecutionTemplate{}
 		}
 
-		// 4. TaskCount
+		// 5. ExecutionTemplate Labels
+		if len(remote.Template.Labels) > 0 && len(locExec.Labels) == 0 {
+			return fmt.Errorf("safety guard violation: remote Job has template.labels configured, but rendered manifest omits 'template.labels'. Please declare template.labels in job.yaml to prevent metadata reset")
+		}
+
+		// 6. ExecutionTemplate Annotations
+		if len(remote.Template.Annotations) > 0 && len(locExec.Annotations) == 0 {
+			return fmt.Errorf("safety guard violation: remote Job has template.annotations configured, but rendered manifest omits 'template.annotations'. Please declare template.annotations in job.yaml to prevent metadata reset")
+		}
+
+		// 7. TaskCount
 		if remote.Template.TaskCount > 0 && locExec.TaskCount == 0 {
 			return fmt.Errorf("safety guard violation: remote Job has task_count=%d configured, but rendered manifest omits 'template.task_count'", remote.Template.TaskCount)
 		}
 
-		// 5. Parallelism
+		// 8. Parallelism
 		if remote.Template.Parallelism > 0 && locExec.Parallelism == 0 {
 			return fmt.Errorf("safety guard violation: remote Job has parallelism=%d configured, but rendered manifest omits 'template.parallelism'", remote.Template.Parallelism)
 		}
@@ -272,35 +287,45 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 				locTask = &runpb.TaskTemplate{}
 			}
 
-			// 6. ServiceAccount
+			// 9. ServiceAccount
 			if remTask.ServiceAccount != "" && locTask.ServiceAccount == "" {
 				return fmt.Errorf("safety guard violation: remote Job has service_account=%s configured, but rendered manifest omits 'template.template.service_account'. Please declare service_account in job.yaml to prevent fallback to default compute SA", remTask.ServiceAccount)
 			}
 
-			// 7. VpcAccess
+			// 10. VpcAccess
 			if remTask.VpcAccess != nil && locTask.VpcAccess == nil {
 				return fmt.Errorf("safety guard violation: remote Job has VPC access configured, but rendered manifest omits 'template.template.vpc_access'. Please declare vpc_access in job.yaml to prevent egress reset")
 			}
 
-			// 8. EncryptionKey
+			// 11. EncryptionKey
 			if remTask.EncryptionKey != "" && locTask.EncryptionKey == "" {
 				return fmt.Errorf("safety guard violation: remote Job has encryption_key (CMEK) configured, but rendered manifest omits 'template.template.encryption_key'. Please declare encryption_key in job.yaml to prevent downgrade to Google-managed key")
 			}
 
-			// 9. Retries (oneof TaskTemplate_MaxRetries)
+			// 12. Retries (oneof TaskTemplate_MaxRetries)
 			if remTask.Retries != nil && locTask.Retries == nil {
 				return fmt.Errorf("safety guard violation: remote Job has max_retries configured, but rendered manifest omits 'template.template.max_retries'")
 			}
 
-			// 10. Timeout
+			// 13. Timeout
 			if remTask.Timeout != nil && locTask.Timeout == nil {
 				return fmt.Errorf("safety guard violation: remote Job has timeout configured, but rendered manifest omits 'template.template.timeout'")
 			}
 
-			// 11. ExecutionEnvironment
+			// 14. ExecutionEnvironment
 			if remTask.ExecutionEnvironment != runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_UNSPECIFIED &&
 				locTask.ExecutionEnvironment == runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_UNSPECIFIED {
 				return fmt.Errorf("safety guard violation: remote Job has execution_environment=%s configured, but rendered manifest omits 'template.template.execution_environment'", remTask.ExecutionEnvironment)
+			}
+
+			// 15. NodeSelector
+			if remTask.NodeSelector != nil && locTask.NodeSelector == nil {
+				return fmt.Errorf("safety guard violation: remote Job has node_selector configured, but rendered manifest omits 'template.template.node_selector'")
+			}
+
+			// 16. GpuZonalRedundancyDisabled
+			if remTask.GpuZonalRedundancyDisabled != nil && locTask.GpuZonalRedundancyDisabled == nil {
+				return fmt.Errorf("safety guard violation: remote Job has gpu_zonal_redundancy_disabled configured, but rendered manifest omits 'template.template.gpu_zonal_redundancy_disabled'")
 			}
 		}
 	}

@@ -65,7 +65,7 @@ type tasksClientAdapter struct {
 
 func (a *tasksClientAdapter) ListTasks(ctx context.Context, req *runpb.ListTasksRequest) ([]*runpb.Task, error) {
 	if a == nil || a.client == nil {
-		return nil, nil
+		return nil, fmt.Errorf("tasks client is not initialized")
 	}
 	it := a.client.ListTasks(ctx, req)
 	var tasks []*runpb.Task
@@ -95,7 +95,7 @@ func (a *revisionsClientAdapter) GetRevision(ctx context.Context, req *runpb.Get
 
 func (a *revisionsClientAdapter) ListRevisions(ctx context.Context, req *runpb.ListRevisionsRequest) ([]*runpb.Revision, error) {
 	if a == nil || a.client == nil {
-		return nil, nil
+		return nil, fmt.Errorf("revisions client is not initialized")
 	}
 	it := a.client.ListRevisions(ctx, req)
 	var revs []*runpb.Revision
@@ -125,7 +125,7 @@ func (a *executionsClientAdapter) GetExecution(ctx context.Context, req *runpb.G
 
 func (a *executionsClientAdapter) ListExecutions(ctx context.Context, req *runpb.ListExecutionsRequest) ([]*runpb.Execution, error) {
 	if a == nil || a.client == nil {
-		return nil, nil
+		return nil, fmt.Errorf("executions client is not initialized")
 	}
 	it := a.client.ListExecutions(ctx, req)
 	var execs []*runpb.Execution

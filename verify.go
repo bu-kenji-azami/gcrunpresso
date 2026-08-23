@@ -2,7 +2,6 @@ package gcrunpresso
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -112,11 +111,9 @@ func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
 	}
 
 	if opt.JSON {
-		b, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
+		if err := printJSON(results); err != nil {
 			return err
 		}
-		fmt.Println(string(b))
 	} else {
 		green := color.New(color.FgGreen)
 		yellow := color.New(color.FgYellow)

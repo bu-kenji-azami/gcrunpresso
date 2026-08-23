@@ -5,6 +5,7 @@ import (
 
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/kayac/gcrunpresso/v2"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func TestBuildTrafficTargetsDefault(t *testing.T) {
@@ -95,41 +96,231 @@ func TestBuildTrafficTargetsInvalidSyntax(t *testing.T) {
 }
 
 func TestValidateJobSafetyGuards(t *testing.T) {
-	// Remote has TaskCount: 10, local has TaskCount: 0 -> should fail
-	remote := &runpb.Job{
-		Template: &runpb.ExecutionTemplate{
-			TaskCount: 10,
+	trueVal := true
+
+	tests := []struct {
+		name       string
+		remote     *runpb.Job
+		localOmit  *runpb.Job
+		localMatch *runpb.Job
+	}{
+		{
+			name: "BinaryAuthorization",
+			remote: &runpb.Job{
+				BinaryAuthorization: &runpb.BinaryAuthorization{
+					BinauthzMethod: &runpb.BinaryAuthorization_Policy{
+						Policy: "projects/p/platforms/cloudRun/policies/default",
+					},
+				},
+			},
+			localOmit: &runpb.Job{},
+			localMatch: &runpb.Job{
+				BinaryAuthorization: &runpb.BinaryAuthorization{
+					BinauthzMethod: &runpb.BinaryAuthorization_UseDefault{UseDefault: true},
+				},
+			},
+		},
+		{
+			name: "Labels",
+			remote: &runpb.Job{
+				Labels: map[string]string{"env": "prod"},
+			},
+			localOmit:  &runpb.Job{},
+			localMatch: &runpb.Job{Labels: map[string]string{"env": "prod"}},
+		},
+		{
+			name: "Annotations",
+			remote: &runpb.Job{
+				Annotations: map[string]string{"managed-by": "terraform"},
+			},
+			localOmit:  &runpb.Job{},
+			localMatch: &runpb.Job{Annotations: map[string]string{"managed-by": "terraform"}},
+		},
+		{
+			name: "LaunchStage",
+			remote: &runpb.Job{
+				LaunchStage: 1, // ALPHA / BETA
+			},
+			localOmit:  &runpb.Job{},
+			localMatch: &runpb.Job{LaunchStage: 1},
+		},
+		{
+			name: "ExecutionTemplate.Labels",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Labels: map[string]string{"app": "worker"},
+				},
+			},
+			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Labels: map[string]string{"app": "worker"}}},
+		},
+		{
+			name: "ExecutionTemplate.Annotations",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Annotations: map[string]string{"note": "critical"},
+				},
+			},
+			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Annotations: map[string]string{"note": "critical"}}},
+		},
+		{
+			name: "TaskCount",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{TaskCount: 10},
+			},
+			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{TaskCount: 5}},
+		},
+		{
+			name: "Parallelism",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{Parallelism: 4},
+			},
+			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Parallelism: 2}},
+		},
+		{
+			name: "ServiceAccount",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
+				},
+			},
+		},
+		{
+			name: "VpcAccess",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{VpcAccess: &runpb.VpcAccess{Connector: "projects/p/connectors/c1"}},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{VpcAccess: &runpb.VpcAccess{Connector: "projects/p/connectors/c1"}},
+				},
+			},
+		},
+		{
+			name: "EncryptionKey",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{EncryptionKey: "projects/p/locations/l/keyRings/r/cryptoKeys/k"},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{EncryptionKey: "projects/p/locations/l/keyRings/r/cryptoKeys/k"},
+				},
+			},
+		},
+		{
+			name: "Retries (oneof)",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						Retries: &runpb.TaskTemplate_MaxRetries{MaxRetries: 3},
+					},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						Retries: &runpb.TaskTemplate_MaxRetries{MaxRetries: 1},
+					},
+				},
+			},
+		},
+		{
+			name: "Timeout",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{Timeout: &durationpb.Duration{Seconds: 600}},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{Timeout: &durationpb.Duration{Seconds: 300}},
+				},
+			},
+		},
+		{
+			name: "ExecutionEnvironment",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						ExecutionEnvironment: runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_GEN2,
+					},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						ExecutionEnvironment: runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_GEN2,
+					},
+				},
+			},
+		},
+		{
+			name: "NodeSelector",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						NodeSelector: &runpb.NodeSelector{Accelerator: "nvidia-l4"},
+					},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						NodeSelector: &runpb.NodeSelector{Accelerator: "nvidia-l4"},
+					},
+				},
+			},
+		},
+		{
+			name: "GpuZonalRedundancyDisabled",
+			remote: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						GpuZonalRedundancyDisabled: &trueVal,
+					},
+				},
+			},
+			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
+			localMatch: &runpb.Job{
+				Template: &runpb.ExecutionTemplate{
+					Template: &runpb.TaskTemplate{
+						GpuZonalRedundancyDisabled: &trueVal,
+					},
+				},
+			},
 		},
 	}
-	local := &runpb.Job{
-		Template: &runpb.ExecutionTemplate{},
-	}
 
-	err := gcrunpresso.ValidateJobSafetyGuards(remote, local)
-	if err == nil {
-		t.Fatal("expected error when remote has task_count but local omits it, got nil")
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Omitting field must return an error
+			if err := gcrunpresso.ValidateJobSafetyGuards(tc.remote, tc.localOmit); err == nil {
+				t.Fatalf("expected safety guard violation when %s is omitted in local manifest, got nil", tc.name)
+			}
 
-	// Local has TaskCount: 5 -> should pass
-	local.Template.TaskCount = 5
-	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
-	if err != nil {
-		t.Fatalf("unexpected error when local specifies task_count: %v", err)
-	}
-
-	// Remote has ServiceAccount, local omits -> should fail
-	remote.Template.Template = &runpb.TaskTemplate{
-		ServiceAccount: "sa@proj.iam.gserviceaccount.com",
-	}
-	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
-	if err == nil {
-		t.Fatal("expected error when remote has service_account but local omits it, got nil")
-	}
-	local.Template.Template = &runpb.TaskTemplate{
-		ServiceAccount: "sa@proj.iam.gserviceaccount.com",
-	}
-	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
-	if err != nil {
-		t.Fatalf("unexpected error when local specifies service_account: %v", err)
+			// Specifying field must pass
+			if err := gcrunpresso.ValidateJobSafetyGuards(tc.remote, tc.localMatch); err != nil {
+				t.Fatalf("unexpected error when %s is specified in local manifest: %v", tc.name, err)
+			}
+		})
 	}
 }

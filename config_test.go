@@ -260,3 +260,40 @@ func TestConfigPrecedenceAllSixFlags(t *testing.T) {
 		t.Errorf("expected ImpersonateServiceAccount yaml-sa, got %s", conf.ImpersonateServiceAccount)
 	}
 }
+
+func TestConfigPrecedenceEnvTierAllSixFlags(t *testing.T) {
+	// ENV level
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "env-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "env-location")
+	t.Setenv("GCRUNPRESSO_SERVICE", "env-service")
+	t.Setenv("GCRUNPRESSO_JOB", "env-job")
+	t.Setenv("GCRUNPRESSO_IMPERSONATE_SERVICE_ACCOUNT", "env-sa@proj.iam.gserviceaccount.com")
+	t.Setenv("GCRUNPRESSO_TIMEOUT", "7m")
+
+	// Empty YAML and empty CLI
+	conf := gcrunpresso.NewDefaultConfig()
+	opt := &gcrunpresso.Option{}
+
+	if err := conf.Restrict(opt); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if conf.Project != "env-project" {
+		t.Errorf("expected Project env-project, got %s", conf.Project)
+	}
+	if conf.Location != "env-location" {
+		t.Errorf("expected Location env-location, got %s", conf.Location)
+	}
+	if conf.Service != "env-service" {
+		t.Errorf("expected Service env-service, got %s", conf.Service)
+	}
+	if conf.Job != "env-job" {
+		t.Errorf("expected Job env-job, got %s", conf.Job)
+	}
+	if conf.ImpersonateServiceAccount != "env-sa@proj.iam.gserviceaccount.com" {
+		t.Errorf("expected ImpersonateServiceAccount env-sa, got %s", conf.ImpersonateServiceAccount)
+	}
+	if conf.Timeout.Duration != 7*time.Minute {
+		t.Errorf("expected Timeout 7m, got %v", conf.Timeout.Duration)
+	}
+}

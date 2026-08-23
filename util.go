@@ -2,6 +2,7 @@ package gcrunpresso
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -74,4 +75,13 @@ func sleepContext(ctx context.Context, d time.Duration) {
 	case <-time.After(d):
 	case <-ctx.Done():
 	}
+}
+
+func printJSON(v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	fmt.Println(string(b))
+	return nil
 }

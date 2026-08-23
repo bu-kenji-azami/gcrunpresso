@@ -2,7 +2,6 @@ package gcrunpresso
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"text/tabwriter"
@@ -79,12 +78,7 @@ func (d *App) Executions(ctx context.Context, opt ExecutionsOption) error {
 	}
 
 	if opt.JSON {
-		b, err := json.MarshalIndent(items, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(b))
-		return nil
+		return printJSON(items)
 	}
 
 	green := color.New(color.FgGreen)

@@ -57,18 +57,24 @@ gcrunpresso rollback --revert-service
 
 ### Inspection & Observability
 ```bash
-# Check service status, active URLs, traffic splits, and conditions
+# Check service status, active URLs, traffic splits, and conditions (--json supported)
 gcrunpresso status
+gcrunpresso status --json
+gcrunpresso status --events
 
-# List revisions
+# List revisions (--json supported)
 gcrunpresso revisions
+gcrunpresso revisions --json
 
-# List job executions
+# List job executions (--json supported)
 gcrunpresso executions
+gcrunpresso executions --json
 
-# Verify images and secrets
+# Verify images and secrets (--json supported)
 gcrunpresso verify
+gcrunpresso verify --json
 
-# Render evaluated YAML
+# Render evaluated YAML (--json supported)
 gcrunpresso render
+gcrunpresso render --json
 ```

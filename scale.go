@@ -56,7 +56,7 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 		Template: template,
 	}
 
-	// Traffic handling (#22, N3, D10)
+	// Traffic handling: scale only adjusts instance scaling and should never accidentally promote traffic
 	isPinned := false
 	for _, t := range remoteSvc.Traffic {
 		if t != nil && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION && t.Revision != "" {
@@ -65,21 +65,14 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 		}
 	}
 
-	if opt.NoTraffic {
+	if opt.NoTraffic || isPinned {
 		if len(remoteSvc.Traffic) > 0 {
 			svcUpdate.Traffic = remoteSvc.Traffic
 			updateMaskPaths = append(updateMaskPaths, "traffic")
 		}
-	} else if isPinned {
-		// Traffic was pinned to specific revision; shift to LATEST so the new scaled revision receives traffic, with warning
-		d.LogWarn("remote service traffic is pinned to specific revision(s); re-routing 100% traffic to LATEST to ensure scaled revision receives traffic")
-		svcUpdate.Traffic = []*runpb.TrafficTarget{
-			{
-				Type:    runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST,
-				Percent: 100,
-			},
+		if isPinned {
+			d.LogWarn("remote service traffic is pinned to specific revision(s); scaling applied to new revision but traffic allocation is preserved and not shifted to latest")
 		}
-		updateMaskPaths = append(updateMaskPaths, "traffic")
 	}
 
 	if opt.DryRun {

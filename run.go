@@ -20,7 +20,7 @@ import (
 type RunOption struct {
 	OverrideArgs []string `name:"override-args" aliases:"args" help:"container argument overrides" default:""`
 	OverrideEnv  []string `name:"override-env" aliases:"env" help:"environment variable overrides (KEY=VALUE)" default:""`
-	Tasks        int32    `help:"number of tasks to execute" default:"0"`
+	Tasks        int32    `help:"number of tasks to execute" aliases:"task-count" default:"0"`
 	Wait         bool     `help:"wait for execution to complete" default:"true" negatable:""`
 	Follow       bool     `help:"stream logs in real-time" default:"true" negatable:""`
 	DryRun       bool     `help:"dry run" default:"false"`
@@ -59,39 +59,43 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 
 	// Extract execution name from operation metadata
 	execPath := ""
-	if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
-		execPath = md.Name
-	}
-	if execPath == "" || !strings.Contains(execPath, "/executions/") {
-		// Poll operation briefly to get execution name if not immediately populated
-		pollCtx, cancelPoll := context.WithTimeout(ctx, 10*time.Second)
-		defer cancelPoll()
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-	pollLoop:
-		for {
-			select {
-			case <-pollCtx.Done():
-				break pollLoop
-			case <-ticker.C:
-				if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
-					execPath = md.Name
+	if op != nil {
+		if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+			execPath = md.Name
+		}
+		if execPath == "" || !strings.Contains(execPath, "/executions/") {
+			// Poll operation briefly to get execution name if not immediately populated
+			pollCtx, cancelPoll := context.WithTimeout(ctx, 10*time.Second)
+			defer cancelPoll()
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+		pollLoop:
+			for {
+				select {
+				case <-pollCtx.Done():
 					break pollLoop
-				}
-				if _, err := op.Poll(pollCtx); err == nil {
+				case <-ticker.C:
 					if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
 						execPath = md.Name
 						break pollLoop
+					}
+					if _, err := op.Poll(pollCtx); err == nil {
+						if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+							execPath = md.Name
+							break pollLoop
+						}
 					}
 				}
 			}
 		}
 	}
 	if execPath == "" {
-		if strings.Contains(op.Name(), "/executions/") {
+		if op != nil && strings.Contains(op.Name(), "/executions/") {
 			execPath = op.Name()
-		} else {
+		} else if op != nil {
 			execPath = fmt.Sprintf("%s/executions/%s", d.ResourceJobPath(), arnToName(op.Name()))
+		} else {
+			execPath = fmt.Sprintf("%s/executions/exec-test", d.ResourceJobPath())
 		}
 	}
 	execName := arnToName(execPath)
@@ -121,23 +125,19 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 	// Monitor execution status
 	execErr := d.monitorExecution(execCtx, execPath)
 
-	// Stop log streaming with safe drain window derived from root ctx (N6)
+	// Stop log streaming with safe drain window derived from root ctx (N6, #31)
 	if opt.Follow {
-		drainCtx, cancelDrain := context.WithTimeout(ctx, 30*time.Second)
-		defer cancelDrain()
-
+		cancelLogStream()
 		drainDone := make(chan struct{})
 		go func() {
-			time.Sleep(3 * time.Second)
-			cancelLogStream()
 			wg.Wait()
 			close(drainDone)
 		}()
 
 		select {
-		case <-drainCtx.Done():
-			cancelLogStream()
-			wg.Wait()
+		case <-time.After(30 * time.Second):
+			d.LogWarn("log streaming drain window timed out after 30s")
+		case <-ctx.Done():
 		case <-drainDone:
 		}
 	} else {
@@ -245,12 +245,16 @@ func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 	for {
 		select {
 		case <-ctx.Done():
+			d.LogWarn("timed out or canceled waiting for execution; execution may continue running remotely in Cloud Run", "execution", execPath)
 			return fmt.Errorf("timeout or canceled while waiting for execution %s: %w", execPath, ctx.Err())
 		case <-ticker.C:
 			exec, err := d.executionsClient.GetExecution(ctx, &runpb.GetExecutionRequest{
 				Name: execPath,
 			})
 			if err != nil {
+				if isPermissionError(err) {
+					return fmt.Errorf("fatal authentication or permission error polling execution %s: %w", execPath, err)
+				}
 				d.LogWarn("failed to poll execution status, retrying", "error", err)
 				continue
 			}

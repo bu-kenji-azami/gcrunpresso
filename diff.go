@@ -2,7 +2,6 @@ package gcrunpresso
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -40,11 +39,9 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 			"has_diff": diffText != "",
 			"diff":     diffText,
 		}
-		b, err := json.MarshalIndent(res, "", "  ")
-		if err != nil {
+		if err := printJSON(res); err != nil {
 			return err
 		}
-		fmt.Println(string(b))
 		if diffText != "" && opt.ExitCode {
 			return fmt.Errorf("differences found")
 		}

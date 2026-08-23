@@ -44,6 +44,12 @@ func TestWarnPlaintextSecretsInEnv(t *testing.T) {
 			},
 		},
 		{
+			Name: "DATABASE_URL",
+			Values: &runpb.EnvVar_Value{
+				Value: "postgres://user:pass@localhost:5432/db",
+			},
+		},
+		{
 			Name: "SECRET_KEY_PROPER",
 			Values: &runpb.EnvVar_ValueSource{
 				ValueSource: &runpb.EnvVarSource{
@@ -64,6 +70,9 @@ func TestWarnPlaintextSecretsInEnv(t *testing.T) {
 	}
 	if !strings.Contains(logOut, "API_KEY") {
 		t.Errorf("expected warning for API_KEY, got: %s", logOut)
+	}
+	if !strings.Contains(logOut, "DATABASE_URL") {
+		t.Errorf("expected warning for DATABASE_URL, got: %s", logOut)
 	}
 	if strings.Contains(logOut, "SECRET_KEY_PROPER") {
 		t.Errorf("expected NO warning for secretKeyRef SECRET_KEY_PROPER, got: %s", logOut)

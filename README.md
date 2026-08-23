@@ -277,6 +277,8 @@ Display detailed service or job health, active URLs, traffic distribution, and c
 
 ```bash
 gcrunpresso status
+gcrunpresso status --json
+gcrunpresso status --events # Include recent Cloud Logging events
 ```
 
 ### `revisions`
@@ -284,6 +286,7 @@ List revisions for a Cloud Run Service with traffic percentage, tags, images, an
 
 ```bash
 gcrunpresso revisions
+gcrunpresso revisions --json
 ```
 
 ### `executions`
@@ -291,6 +294,7 @@ List execution history for a Cloud Run Job.
 
 ```bash
 gcrunpresso executions
+gcrunpresso executions --json
 ```
 
 ### `diff`
@@ -298,6 +302,7 @@ Display a unified colorized diff between local definition files and the remote C
 
 ```bash
 gcrunpresso diff
+gcrunpresso diff --json
 
 # Exit with code 1 if differences exist (ideal for CI drift detection)
 gcrunpresso diff --exit-code
@@ -308,6 +313,7 @@ Validate referenced container images (Artifact Registry) and Secret Manager secr
 
 ```bash
 gcrunpresso verify
+gcrunpresso verify --json
 ```
 
 ### `render`

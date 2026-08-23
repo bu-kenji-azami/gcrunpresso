@@ -37,9 +37,10 @@ type Config struct {
 }
 
 type PluginConfig struct {
-	Name   string         `yaml:"name" json:"name"`
-	Type   string         `yaml:"type" json:"type"`
-	Config map[string]any `yaml:"config" json:"config"`
+	Name       string         `yaml:"name" json:"name"`
+	Type       string         `yaml:"type" json:"type"`
+	FuncPrefix string         `yaml:"func_prefix,omitempty" json:"func_prefix,omitempty"`
+	Config     map[string]any `yaml:"config" json:"config"`
 }
 
 // NewDefaultConfig returns a Config with no timeout set. The default is applied
@@ -148,8 +149,9 @@ func (l *configLoader) Load(ctx context.Context, path string, c *Config) error {
 
 	for _, p := range c.Plugins {
 		cp := ConfigPlugin{
-			Name:   p.Name,
-			Config: p.Config,
+			Name:       p.Name,
+			Config:     p.Config,
+			FuncPrefix: p.FuncPrefix,
 		}
 		if err := cp.Setup(ctx, c, l); err != nil {
 			return fmt.Errorf("failed to setup plugin %s: %w", p.Name, err)

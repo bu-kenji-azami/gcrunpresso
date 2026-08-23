@@ -112,7 +112,7 @@ func TestScalePinnedTrafficWarningAndShiftToLatest(t *testing.T) {
 		t.Fatal("expected UpdateServiceRequest to be recorded")
 	}
 	updatedTraffic := mockClient.lastUpdateReq.Service.Traffic
-	if len(updatedTraffic) != 1 || updatedTraffic[0].Type != runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST {
-		t.Errorf("expected traffic shifted to LATEST, got %v", updatedTraffic)
+	if len(updatedTraffic) != 1 || updatedTraffic[0].Revision != "rev-pinned-1" || updatedTraffic[0].Percent != 100 {
+		t.Errorf("expected traffic to preserve pinned revision rev-pinned-1, got %v", updatedTraffic)
 	}
 }

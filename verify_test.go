@@ -86,7 +86,8 @@ func (m *mockSecretManagerAPI) GetSecret(ctx context.Context, req *secretmanager
 }
 
 type mockArtifactRegistryAPI struct {
-	permDenied bool
+	permDenied           bool
+	calledGetDockerImage bool
 }
 
 func (m *mockArtifactRegistryAPI) GetRepository(ctx context.Context, req *artifactregistrypb.GetRepositoryRequest, opts ...gax.CallOption) (*artifactregistrypb.Repository, error) {
@@ -97,6 +98,7 @@ func (m *mockArtifactRegistryAPI) GetRepository(ctx context.Context, req *artifa
 }
 
 func (m *mockArtifactRegistryAPI) GetDockerImage(ctx context.Context, req *artifactregistrypb.GetDockerImageRequest, opts ...gax.CallOption) (*artifactregistrypb.DockerImage, error) {
+	m.calledGetDockerImage = true
 	if m.permDenied {
 		return nil, status.Error(codes.PermissionDenied, "permission denied")
 	}
@@ -151,5 +153,52 @@ service_definition: service.yaml
 	})
 	if err != nil {
 		t.Fatalf("expected Verify to succeed (skipping permission denied items), but got error: %v", err)
+	}
+}
+
+func TestVerifyImageDigestCallsGetDockerImage(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	serviceYAML := `
+template:
+  containers:
+    - image: "asia-northeast1-docker.pkg.dev/my-proj/my-repo/app@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+`
+	servicePath := filepath.Join(tmpDir, "service.yaml")
+	if err := os.WriteFile(servicePath, []byte(serviceYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configYAML := `
+project: my-proj
+location: asia-northeast1
+service: my-svc
+service_definition: service.yaml
+`
+	configPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mockAR := &mockArtifactRegistryAPI{}
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		ConfigFilePath: configPath,
+	},
+		gcrunpresso.WithArtifactRegistryClient(mockAR),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+	defer app.Close()
+
+	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
+		Image: true,
+	})
+	if err != nil {
+		t.Fatalf("expected Verify to succeed, got error: %v", err)
+	}
+
+	if !mockAR.calledGetDockerImage {
+		t.Error("expected GetDockerImage to be called for image digest reference")
 	}
 }

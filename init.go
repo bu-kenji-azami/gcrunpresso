@@ -57,7 +57,7 @@ func (d *App) initService(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", svcFilePath)
 		}
 	}
-	if err := os.WriteFile(svcFilePath, svcYAML, 0644); err != nil {
+	if err := os.WriteFile(svcFilePath, svcYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", svcFilePath, err)
 	}
 	d.LogInfo("wrote service definition", "file", svcFilePath)
@@ -79,7 +79,7 @@ func (d *App) initService(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", cfgFilePath)
 		}
 	}
-	if err := os.WriteFile(cfgFilePath, cfgYAML, 0644); err != nil {
+	if err := os.WriteFile(cfgFilePath, cfgYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", cfgFilePath, err)
 	}
 	d.LogInfo("wrote gcrunpresso config", "file", cfgFilePath)
@@ -112,7 +112,7 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", jobFilePath)
 		}
 	}
-	if err := os.WriteFile(jobFilePath, jobYAML, 0644); err != nil {
+	if err := os.WriteFile(jobFilePath, jobYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", jobFilePath, err)
 	}
 	d.LogInfo("wrote job definition", "file", jobFilePath)
@@ -134,7 +134,7 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", cfgFilePath)
 		}
 	}
-	if err := os.WriteFile(cfgFilePath, cfgYAML, 0644); err != nil {
+	if err := os.WriteFile(cfgFilePath, cfgYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", cfgFilePath, err)
 	}
 	d.LogInfo("wrote gcrunpresso config", "file", cfgFilePath)
@@ -143,7 +143,8 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 }
 
 var sensitiveKeywords = []string{
-	"SECRET", "PASSWORD", "KEY", "TOKEN", "CREDENTIAL", "API_KEY", "AUTH",
+	"SECRET", "PASSWORD", "PASS", "KEY", "TOKEN", "CREDENTIAL", "API_KEY", "AUTH",
+	"DATABASE_URL", "DB_URI", "PRIVATE", "SIGNING",
 }
 
 func (d *App) warnPlaintextSecretsInEnv(containerName string, envVars []*runpb.EnvVar) {

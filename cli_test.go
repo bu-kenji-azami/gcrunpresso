@@ -1,8 +1,12 @@
 package gcrunpresso_test
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/kayac/gcrunpresso/v2"
 )
 
@@ -157,17 +161,97 @@ func TestParseCLIv2(t *testing.T) {
 		}
 	})
 
-	t.Run("CLI exit code propagation", func(t *testing.T) {
+	t.Run("CLI exit code propagation on parse error", func(t *testing.T) {
 		customParse := func(args []string) (string, *gcrunpresso.CLIOptions, func(), error) {
-			return "run", &gcrunpresso.CLIOptions{
-				LogFormat: "text",
-				Run:       &gcrunpresso.RunOption{},
-			}, func() {}, &gcrunpresso.ExitCodeError{Code: 42, Err: nil}
+			return "", nil, func() {}, errors.New("parse error")
 		}
 
 		exitCode, err := gcrunpresso.CLI(t.Context(), customParse)
-		if exitCode != 1 && exitCode != 42 { // Note: customParse returns error directly before dispatchCLI
-			t.Logf("CLI parse error exit code: %d, %v", exitCode, err)
+		if exitCode != 1 {
+			t.Errorf("expected exit code 1 on parse error, got %d", exitCode)
+		}
+		if err == nil {
+			t.Error("expected non-nil error, got nil")
+		}
+	})
+
+	t.Run("CLI exit code propagation on dispatch error", func(t *testing.T) {
+		customParse := func(args []string) (string, *gcrunpresso.CLIOptions, func(), error) {
+			return "unknown-subcommand", &gcrunpresso.CLIOptions{
+				LogFormat: "text",
+			}, func() {}, nil
+		}
+
+		exitCode, err := gcrunpresso.CLI(t.Context(), customParse)
+		if exitCode != 0 && exitCode != 1 {
+			t.Errorf("unexpected exit code: %d, err: %v", exitCode, err)
+		}
+	})
+}
+
+func TestJSONSubcommandOutputs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	serviceYAML := `
+template:
+  containers:
+    - image: "gcr.io/my-proj/app:v1"
+`
+	servicePath := filepath.Join(tmpDir, "service.yaml")
+	if err := os.WriteFile(servicePath, []byte(serviceYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configYAML := `
+project: my-proj
+location: asia-northeast1
+service: my-svc
+service_definition: service.yaml
+`
+	configPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		ConfigFilePath: configPath,
+	},
+		gcrunpresso.WithServicesClient(&mockServicesAPI{
+			svc: &runpb.Service{
+				Name: "projects/my-proj/locations/asia-northeast1/services/my-svc",
+				Uri:  "https://my-svc-xyz.a.run.app",
+			},
+		}),
+		gcrunpresso.WithRevisionsClient(&mockRevisionsAPI{
+			revisions: []*runpb.Revision{
+				{
+					Name: "projects/my-proj/locations/asia-northeast1/services/my-svc/revisions/rev-1",
+				},
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	t.Run("status --json", func(t *testing.T) {
+		err := app.Status(t.Context(), gcrunpresso.StatusOption{JSON: true})
+		if err != nil {
+			t.Fatalf("status --json failed: %v", err)
+		}
+	})
+
+	t.Run("revisions --json", func(t *testing.T) {
+		err := app.Revisions(t.Context(), gcrunpresso.RevisionsOption{JSON: true})
+		if err != nil {
+			t.Fatalf("revisions --json failed: %v", err)
+		}
+	})
+
+	t.Run("diff --json", func(t *testing.T) {
+		err := app.Diff(t.Context(), gcrunpresso.DiffOption{JSON: true})
+		if err != nil {
+			t.Fatalf("diff --json failed: %v", err)
 		}
 	})
 }

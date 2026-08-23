@@ -1,10 +1,13 @@
 package gcrunpresso_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
+	gax "github.com/googleapis/gax-go/v2"
 	"github.com/kayac/gcrunpresso/v2"
 )
 
@@ -95,6 +98,96 @@ func TestExtractMaxExitCode(t *testing.T) {
 	var exitCoder interface{ ExitCode() int }
 	if !errors.As(err, &exitCoder) {
 		t.Fatalf("expected ExitCodeError, got %T", err)
+	}
+	if exitCoder.ExitCode() != 42 {
+		t.Errorf("expected exit code 42, got %d", exitCoder.ExitCode())
+	}
+}
+
+type mockRunJobsAPI struct{}
+
+func (m *mockRunJobsAPI) GetJob(ctx context.Context, req *runpb.GetJobRequest, opts ...gax.CallOption) (*runpb.Job, error) {
+	return &runpb.Job{Name: req.Name}, nil
+}
+func (m *mockRunJobsAPI) CreateJob(ctx context.Context, req *runpb.CreateJobRequest, opts ...gax.CallOption) (*run.CreateJobOperation, error) {
+	return nil, nil
+}
+func (m *mockRunJobsAPI) UpdateJob(ctx context.Context, req *runpb.UpdateJobRequest, opts ...gax.CallOption) (*run.UpdateJobOperation, error) {
+	return nil, nil
+}
+func (m *mockRunJobsAPI) DeleteJob(ctx context.Context, req *runpb.DeleteJobRequest, opts ...gax.CallOption) (*run.DeleteJobOperation, error) {
+	return nil, nil
+}
+func (m *mockRunJobsAPI) RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (*run.RunJobOperation, error) {
+	return nil, nil
+}
+
+type mockRunExecutionsAPI struct {
+	exec *runpb.Execution
+}
+
+func (m *mockRunExecutionsAPI) GetExecution(ctx context.Context, req *runpb.GetExecutionRequest, opts ...gax.CallOption) (*runpb.Execution, error) {
+	return m.exec, nil
+}
+func (m *mockRunExecutionsAPI) ListExecutions(ctx context.Context, req *runpb.ListExecutionsRequest) ([]*runpb.Execution, error) {
+	return []*runpb.Execution{m.exec}, nil
+}
+
+type mockRunTasksAPI struct {
+	tasks []*runpb.Task
+}
+
+func (m *mockRunTasksAPI) ListTasks(ctx context.Context, req *runpb.ListTasksRequest) ([]*runpb.Task, error) {
+	return m.tasks, nil
+}
+
+func TestAppRunExitCodePropagation(t *testing.T) {
+	mockJobs := &mockRunJobsAPI{}
+	mockExecs := &mockRunExecutionsAPI{
+		exec: &runpb.Execution{
+			Name:        "projects/p/locations/l/jobs/my-job/executions/exec-1",
+			FailedCount: 1,
+			TaskCount:   1,
+			Conditions: []*runpb.Condition{
+				{Type: "Completed", State: runpb.Condition_CONDITION_FAILED, Message: "task failed"},
+			},
+		},
+	}
+	mockTasks := &mockRunTasksAPI{
+		tasks: []*runpb.Task{
+			{
+				Name: "projects/p/locations/l/jobs/my-job/executions/exec-1/tasks/0",
+				LastAttemptResult: &runpb.TaskAttemptResult{
+					ExitCode: 42,
+				},
+			},
+		},
+	}
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "p",
+		Location: "l",
+		Job:      "my-job",
+	},
+		gcrunpresso.WithJobsClient(mockJobs),
+		gcrunpresso.WithExecutionsClient(mockExecs),
+		gcrunpresso.WithTasksClient(mockTasks),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	err = app.Run(t.Context(), gcrunpresso.RunOption{
+		Wait:   true,
+		Follow: false,
+	})
+	if err == nil {
+		t.Fatal("expected non-nil error from app.Run, got nil")
+	}
+
+	var exitCoder interface{ ExitCode() int }
+	if !errors.As(err, &exitCoder) {
+		t.Fatalf("expected ExitCodeError, got %T: %v", err, err)
 	}
 	if exitCoder.ExitCode() != 42 {
 		t.Errorf("expected exit code 42, got %d", exitCoder.ExitCode())
