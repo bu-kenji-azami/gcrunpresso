@@ -38,8 +38,13 @@ gcrunpresso deploy --no-traffic --tag candidate
 gcrunpresso run
 
 # Override container arguments and environment
-gcrunpresso run --args "--migrate" --env "DRY_RUN=false"
+gcrunpresso run --override-args "--migrate" --override-env "DRY_RUN=false"
 ```
+
+`run` propagates the container's exit status: `0` when every task succeeded, `2`-`255` for the
+highest non-zero container exit code across tasks, and `1` for either an internal gcrunpresso
+failure or a task that exited `1`. Branch on the exit code rather than parsing log text.
+`--parallelism` was removed; set `template.parallelism` in the Job definition instead.
 
 ### Rolling Back a Service
 ```bash

@@ -141,7 +141,7 @@ func setupPluginSecretManager(ctx context.Context, p ConfigPlugin, c *Config, l 
 	}
 
 	deprecatedSecretFunc := func(name string) (string, error) {
-		return "", fmt.Errorf("secret template function has been removed for security reasons. Use secretmanager_ref with Cloud Run native valueSource.secretKeyRef instead. If secrets were previously exposed in plaintext, rotate them immediately.")
+		return "", fmt.Errorf("secret template function has been removed for security reasons, use secretmanager_ref with valueSource.secretKeyRef instead, and rotate any secrets that were previously exposed in plaintext")
 	}
 
 	prefix := p.FuncPrefix

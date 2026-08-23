@@ -21,8 +21,11 @@ make
 # Install to GOPATH/bin
 make install
 
-# Run all tests
+# Run all tests (uses the release build tags and gates on check-no-aws)
 make test
+
+# Verify the shipped binary carries no AWS dependencies
+make check-no-aws
 
 # Run a single test
 go test -v -run TestFunctionName ./...
@@ -55,6 +58,9 @@ Commands are defined as option structs in their respective files:
 - `diff.go` - Show semantic diff between local definition and remote Cloud Run resource
 - `verify.go` - Validate container image availability (Artifact Registry) and secrets (Secret Manager)
 - `init.go` - Generate configuration and YAML definitions from existing Cloud Run resources
+- `render.go` - Render a definition file with template functions applied, without calling any API
+- `wait.go` - Wait for a Service revision or Job execution to reach a ready state
+- `delete.go` - Delete a Cloud Run Service or Job
 
 ### Template System
 
@@ -86,6 +92,10 @@ go test -v ./... -run TestConfig
 go test -race ./...
 ```
 
+`make test` runs the suite with `-tags "no_azurerm,no_s3"` so the tested dependency graph
+matches the shipped binary's. Plain `go test ./...` compiles the AWS/Azure tfstate backends
+too, which is fine locally but is not what ships.
+
 - Use `github.com/google/go-cmp/cmp` for value comparisons in tests
   ```go
   if diff := cmp.Diff(want, got); diff != "" {
@@ -93,6 +103,11 @@ go test -race ./...
   }
   ```
 - Use `t.Context()` instead of `context.Background()` in tests
+
+## Documentation
+
+- When adding or changing features, always check README.md for inconsistencies and update it if needed (e.g. command examples, flag lists, log output examples)
+- When adding or modifying sections in README.md, always update the Table of Contents at the top of the file to match
 
 ## Code Style
 

@@ -113,21 +113,9 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 		})
 	}
 
-	if opt.Events && d.logAdminClient != nil {
+	if opt.Events {
 		filter := fmt.Sprintf(`resource.type="cloud_run_revision" AND resource.labels.service_name="%s" AND resource.labels.location="%s"`, d.config.Service, d.config.Location)
-		it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter))
-		count := 0
-		for {
-			entry, err := it.Next()
-			if err == iterator.Done || count >= 10 {
-				break
-			}
-			if err != nil {
-				break
-			}
-			result.RecentEvents = append(result.RecentEvents, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
-			count++
-		}
+		result.RecentEvents = d.fetchRecentEvents(ctx, filter, recentEventsLimit)
 	}
 
 	if opt.JSON {
@@ -222,21 +210,9 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 		})
 	}
 
-	if opt.Events && d.logAdminClient != nil {
+	if opt.Events {
 		filter := fmt.Sprintf(`resource.type="cloud_run_job" AND resource.labels.job_name="%s" AND resource.labels.location="%s"`, d.config.Job, d.config.Location)
-		it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter))
-		count := 0
-		for {
-			entry, err := it.Next()
-			if err == iterator.Done || count >= 10 {
-				break
-			}
-			if err != nil {
-				break
-			}
-			result.RecentEvents = append(result.RecentEvents, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
-			count++
-		}
+		result.RecentEvents = d.fetchRecentEvents(ctx, filter, recentEventsLimit)
 	}
 
 	if opt.JSON {
@@ -292,4 +268,30 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 	}
 
 	return nil
+}
+
+// recentEventsLimit is how many of the most recent log entries `status --events` reports.
+const recentEventsLimit = 10
+
+// fetchRecentEvents returns up to limit of the most recent log entries matching filter.
+// Entries are requested newest-first; logadmin lists oldest-to-newest by default, which
+// would otherwise surface the oldest entries in the log rather than the recent ones.
+func (d *App) fetchRecentEvents(ctx context.Context, filter string, limit int) []string {
+	if d.logAdminClient == nil {
+		return nil
+	}
+	it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter), logadmin.NewestFirst())
+	var events []string
+	for len(events) < limit {
+		entry, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			d.LogWarn("failed to fetch recent events", "error", err)
+			break
+		}
+		events = append(events, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
+	}
+	return events
 }

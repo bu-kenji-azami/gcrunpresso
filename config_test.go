@@ -10,9 +10,57 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
+	// NewDefaultConfig deliberately leaves Timeout unset so that the ENV tier is
+	// reachable in Restrict; the 10m default is applied last, after CLI and YAML.
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
+
 	conf := gcrunpresso.NewDefaultConfig()
+	if err := conf.Restrict(&gcrunpresso.Option{Service: "test-service"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if conf.Timeout.Duration != 10*time.Minute {
 		t.Errorf("expected default timeout 10m, got %v", conf.Timeout.Duration)
+	}
+}
+
+func TestConfigTimeoutFromEnv(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
+	t.Setenv("GCRUNPRESSO_TIMEOUT", "42s")
+
+	conf := gcrunpresso.NewDefaultConfig()
+	if err := conf.Restrict(&gcrunpresso.Option{Service: "test-service"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conf.Timeout.Duration != 42*time.Second {
+		t.Errorf("expected GCRUNPRESSO_TIMEOUT to apply as 42s, got %v", conf.Timeout.Duration)
+	}
+}
+
+func TestConfigTimeoutFromEnvInvalid(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
+	t.Setenv("GCRUNPRESSO_TIMEOUT", "not-a-duration")
+
+	conf := gcrunpresso.NewDefaultConfig()
+	if err := conf.Restrict(&gcrunpresso.Option{Service: "test-service"}); err == nil {
+		t.Fatal("expected error for malformed GCRUNPRESSO_TIMEOUT, got nil")
+	}
+}
+
+func TestConfigTimeoutYAMLBeatsEnv(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "asia-northeast1")
+	t.Setenv("GCRUNPRESSO_TIMEOUT", "42s")
+
+	conf := gcrunpresso.NewDefaultConfig()
+	conf.Timeout = gcrunpresso.Duration{Duration: 7 * time.Minute} // as if loaded from gcrunpresso.yml
+	if err := conf.Restrict(&gcrunpresso.Option{Service: "test-service"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conf.Timeout.Duration != 7*time.Minute {
+		t.Errorf("expected YAML timeout 7m to outrank GCRUNPRESSO_TIMEOUT, got %v", conf.Timeout.Duration)
 	}
 }
 

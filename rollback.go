@@ -161,6 +161,10 @@ func (d *App) rollbackRevertTemplate(ctx context.Context, currentSvc *runpb.Serv
 		EncryptionKey:                 targetRev.EncryptionKey,
 		SessionAffinity:               targetRev.SessionAffinity,
 		NodeSelector:                  targetRev.NodeSelector,
+		ServiceMesh:                   targetRev.ServiceMesh,
+		EncryptionKeyRevocationAction: targetRev.EncryptionKeyRevocationAction,
+		EncryptionKeyShutdownDuration: targetRev.EncryptionKeyShutdownDuration,
+		GpuZonalRedundancyDisabled:    targetRev.GpuZonalRedundancyDisabled,
 	}
 	if currentSvc.Template != nil {
 		template.HealthCheckDisabled = currentSvc.Template.HealthCheckDisabled

@@ -21,6 +21,7 @@ Definition files support Go template syntax and Jsonnet native functions to embe
 - [Subcommands](#subcommands)
   - [deploy](#deploy)
   - [run](#run)
+    - [Exit codes](#exit-codes)
   - [rollback](#rollback)
   - [scale](#scale)
   - [status](#status)
@@ -228,11 +229,27 @@ Execute Cloud Run Job with optional runtime parameter overrides and real-time lo
 gcrunpresso run
 
 # Override container arguments, environment variables, and task count
-gcrunpresso run --args "--seed" --env "FORCE=true" --tasks 3
+gcrunpresso run --override-args "--seed" --override-env "FORCE=true" --tasks 3
 
 # Trigger job asynchronously without waiting
-gcrunpresso run --no-wait --no-follow
+gcrunpresso run --wait=false
 ```
+
+`--override-args` and `--override-env` accept `--args` / `--env` as aliases. `--parallelism`
+was removed; use the Job definition's `template.parallelism` instead.
+
+#### Exit codes
+
+`run` propagates the container's own exit status so CI can branch on it:
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | Execution completed and every task exited `0` |
+| `1` | gcrunpresso itself failed (config, API error, timeout), or a task exited `1` |
+| `2`-`255` | Propagated container exit code -- the highest non-zero code across all tasks |
+
+Because code `1` covers both an internal tool failure and a container that exited `1`, treat
+`1` as "failed, cause unspecified" and read the log output to distinguish them.
 
 ### `rollback`
 Rollback Service traffic or specification to a healthy revision.

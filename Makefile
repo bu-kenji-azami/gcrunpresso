@@ -1,7 +1,7 @@
 GIT_VER ?= $(shell git describe --tags | sed -e 's/-/+/')
 DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
 
-.PHONY: test binary install clean
+.PHONY: test binary install clean check-no-aws
 
 cmd/gcrunpresso/gcrunpresso: *.go cmd/gcrunpresso/*.go go.*
 	cd cmd/gcrunpresso && go build -tags "no_azurerm,no_s3" -ldflags "-s -w -X github.com/kayac/gcrunpresso/v2.Version=${GIT_VER}" -trimpath
@@ -9,8 +9,19 @@ cmd/gcrunpresso/gcrunpresso: *.go cmd/gcrunpresso/*.go go.*
 install: cmd/gcrunpresso/gcrunpresso
 	install cmd/gcrunpresso/gcrunpresso `go env GOPATH`/bin/gcrunpresso
 
-test:
-	go test -race ./...
+test: check-no-aws
+	go test -tags "no_azurerm,no_s3" -race ./...
+
+# The shipped binary is built with no_azurerm/no_s3 to keep the AWS/Azure tfstate
+# backends out. Verify that guarantee instead of assuming it.
+check-no-aws:
+	@AWS_DEPS=$$(go list -tags "no_azurerm,no_s3" -deps ./cmd/gcrunpresso | grep -i aws || true); \
+	if [ -n "$$AWS_DEPS" ]; then \
+		echo "FAIL: AWS dependencies detected in binary:"; \
+		echo "$$AWS_DEPS"; \
+		exit 1; \
+	fi; \
+	echo "PASS: zero AWS dependencies verified"
 
 packages:
 	goreleaser build --skip-validate --clean

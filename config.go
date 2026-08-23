@@ -42,10 +42,11 @@ type PluginConfig struct {
 	Config map[string]any `yaml:"config" json:"config"`
 }
 
+// NewDefaultConfig returns a Config with no timeout set. The default is applied
+// at the end of Restrict, after the CLI > YAML > ENV tiers have been resolved,
+// so that GCRUNPRESSO_TIMEOUT is reachable (App.Timeout also falls back).
 func NewDefaultConfig() *Config {
-	return &Config{
-		Timeout: Duration{Duration: defaultTimeout},
-	}
+	return &Config{}
 }
 
 type configLoader struct {
@@ -206,10 +207,17 @@ func (c *Config) Restrict(opt *Option) error {
 
 	if c.Timeout.Duration == 0 {
 		if tStr := os.Getenv("GCRUNPRESSO_TIMEOUT"); tStr != "" {
-			if d, err := time.ParseDuration(tStr); err == nil {
-				c.Timeout = Duration{Duration: d}
+			d, err := time.ParseDuration(tStr)
+			if err != nil {
+				return fmt.Errorf("invalid GCRUNPRESSO_TIMEOUT %q: %w", tStr, err)
 			}
+			c.Timeout = Duration{Duration: d}
 		}
+	}
+
+	// Lowest tier of all: the built-in default, applied only if no tier supplied one.
+	if c.Timeout.Duration == 0 {
+		c.Timeout = Duration{Duration: defaultTimeout}
 	}
 
 	if c.Project == "" {

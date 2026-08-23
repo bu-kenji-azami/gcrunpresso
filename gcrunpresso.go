@@ -240,74 +240,83 @@ func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 	// Initialize GAPIC clients if not injected
 	if app.servicesClient == nil {
 		c, err := run.NewServicesClient(ctx, clientOpts...)
-		if err == nil {
-			app.servicesClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create run services client: %w", err)
 		}
+		app.servicesClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	if app.jobsClient == nil {
 		c, err := run.NewJobsClient(ctx, clientOpts...)
-		if err == nil {
-			app.jobsClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create run jobs client: %w", err)
 		}
+		app.jobsClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	if app.revisionsClient == nil {
 		c, err := run.NewRevisionsClient(ctx, clientOpts...)
-		if err == nil {
-			app.revisionsClient = &revisionsClientAdapter{client: c}
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create run revisions client: %w", err)
 		}
+		app.revisionsClient = &revisionsClientAdapter{client: c}
+		app.closers = append(app.closers, c)
 	}
 
 	if app.executionsClient == nil {
 		c, err := run.NewExecutionsClient(ctx, clientOpts...)
-		if err == nil {
-			app.executionsClient = &executionsClientAdapter{client: c}
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create run executions client: %w", err)
 		}
+		app.executionsClient = &executionsClientAdapter{client: c}
+		app.closers = append(app.closers, c)
 	}
 
 	if app.tasksClient == nil {
 		c, err := run.NewTasksClient(ctx, clientOpts...)
-		if err == nil {
-			app.tasksClient = &tasksClientAdapter{client: c}
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create run tasks client: %w", err)
 		}
+		app.tasksClient = &tasksClientAdapter{client: c}
+		app.closers = append(app.closers, c)
 	}
 
 	if app.logTailClient == nil {
 		c, err := logging.NewClient(ctx, clientOpts...)
-		if err == nil {
-			app.logTailClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create logging tail client: %w", err)
 		}
+		app.logTailClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	if app.logAdminClient == nil {
 		c, err := logadmin.NewClient(ctx, conf.Project, clientOpts...)
-		if err == nil {
-			app.logAdminClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create logging admin client: %w", err)
 		}
+		app.logAdminClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	if app.secretClient == nil {
 		c, err := secretmanager.NewClient(ctx, clientOpts...)
-		if err == nil {
-			app.secretClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create secret manager client: %w", err)
 		}
+		app.secretClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	if app.arClient == nil {
 		c, err := artifactregistry.NewClient(ctx, clientOpts...)
-		if err == nil {
-			app.arClient = c
-			app.closers = append(app.closers, c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create artifact registry client: %w", err)
 		}
+		app.arClient = c
+		app.closers = append(app.closers, c)
 	}
 
 	return app, nil

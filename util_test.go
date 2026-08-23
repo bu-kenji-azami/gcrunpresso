@@ -144,24 +144,3 @@ func TestFindServingRevisions(t *testing.T) {
 		t.Errorf("expected [rev-fallback], got %v", fallbackRevs)
 	}
 }
-
-func TestFindPrimaryServingRevision(t *testing.T) {
-	svc := &runpb.Service{
-		LatestReadyRevision: "rev-v1",
-		TrafficStatuses: []*runpb.TrafficTargetStatus{
-			{
-				Revision: "rev-v1",
-				Percent:  30,
-			},
-			{
-				Revision: "rev-v2",
-				Percent:  70,
-			},
-		},
-	}
-
-	primary := gcrunpresso.FindPrimaryServingRevision(svc)
-	if primary != "rev-v2" {
-		t.Errorf("expected primary rev-v2, got %s", primary)
-	}
-}

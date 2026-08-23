@@ -37,28 +37,6 @@ func FindServingRevisions(rawSvc *runpb.Service) []string {
 	return revs
 }
 
-// FindPrimaryServingRevision returns the revision receiving the highest percentage of traffic,
-// or LatestReadyRevision if unavailable.
-func FindPrimaryServingRevision(rawSvc *runpb.Service) string {
-	if rawSvc == nil {
-		return ""
-	}
-	var maxPercent int32
-	var primaryRev string
-
-	for _, ts := range rawSvc.TrafficStatuses {
-		if ts != nil && ts.Percent > maxPercent && ts.Revision != "" {
-			maxPercent = ts.Percent
-			primaryRev = ts.Revision
-		}
-	}
-
-	if primaryRev != "" {
-		return primaryRev
-	}
-	return rawSvc.LatestReadyRevision
-}
-
 func parseLabels(s string) (map[string]string, error) {
 	labels := make(map[string]string)
 	if s == "" {

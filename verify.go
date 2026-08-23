@@ -225,27 +225,38 @@ func (d *App) verifyImage(ctx context.Context, image string) error {
 
 			if d.arClient != nil {
 				repoPath := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", proj, loc, repo)
-				// First check docker image if tag/digest is present
-				dockerImgPath := fmt.Sprintf("%s/dockerImages/%s", repoPath, strings.ReplaceAll(pkgAndTag, ":", "@"))
-				_, err := d.arClient.GetDockerImage(ctx, &artifactregistrypb.GetDockerImageRequest{
-					Name: dockerImgPath,
-				})
-				if err == nil {
-					return nil
-				}
-				if isPermissionError(err) {
-					return ErrSkipVerify(fmt.Sprintf("permission denied checking image %s", dockerImgPath))
-				}
 
-				// Fallback to checking repository existence
-				_, repoErr := d.arClient.GetRepository(ctx, &artifactregistrypb.GetRepositoryRequest{
+				// The repository must exist regardless of how the image is referenced.
+				if _, repoErr := d.arClient.GetRepository(ctx, &artifactregistrypb.GetRepositoryRequest{
 					Name: repoPath,
-				})
-				if repoErr != nil {
+				}); repoErr != nil {
 					if isPermissionError(repoErr) {
 						return ErrSkipVerify(fmt.Sprintf("permission denied checking repository %s", repoPath))
 					}
 					return fmt.Errorf("artifact registry repository %s not found: %w", repoPath, repoErr)
+				}
+
+				// GetDockerImage addresses an image by digest. A digest reference is passed
+				// through verbatim (its own colon is part of "sha256:..."); a tag cannot be
+				// resolved by this call, so it is reported as unverified rather than as OK.
+				if _, digest, ok := strings.Cut(pkgAndTag, "@"); ok && digest != "" {
+					dockerImgPath := fmt.Sprintf("%s/dockerImages/%s", repoPath, pkgAndTag)
+					_, err := d.arClient.GetDockerImage(ctx, &artifactregistrypb.GetDockerImageRequest{
+						Name: dockerImgPath,
+					})
+					if err == nil {
+						return nil
+					}
+					if isPermissionError(err) {
+						return ErrSkipVerify(fmt.Sprintf("permission denied checking image %s", dockerImgPath))
+					}
+					if isNotFoundError(err) {
+						return fmt.Errorf("container image %s not found in artifact registry", image)
+					}
+					return fmt.Errorf("failed to check container image %s: %w", image, err)
+				}
+				if idx := strings.LastIndex(pkgAndTag, ":"); idx != -1 {
+					return ErrSkipVerify(fmt.Sprintf("repository %s exists; tag %q not verified (requires digest resolution)", repoPath, pkgAndTag[idx+1:]))
 				}
 			}
 		}
