@@ -1,6 +1,8 @@
 package gcrunpresso_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -252,6 +254,19 @@ template:
 		t.Fatal(err)
 	}
 
+	jobYAML := `
+template:
+  taskCount: 3
+  parallelism: 2
+  template:
+    containers:
+      - image: "gcr.io/my-proj/job:v1"
+`
+	jobPath := filepath.Join(tmpDir, "job.yaml")
+	if err := os.WriteFile(jobPath, []byte(jobYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	configYAML := `
 project: my-proj
 location: asia-northeast1
@@ -263,6 +278,17 @@ service_definition: service.yaml
 		t.Fatal(err)
 	}
 
+	jobConfigYAML := `
+project: my-proj
+location: asia-northeast1
+job: my-job
+job_definition: job.yaml
+`
+	jobConfigPath := filepath.Join(tmpDir, "job-gcrunpresso.yml")
+	if err := os.WriteFile(jobConfigPath, []byte(jobConfigYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
 		ConfigFilePath: configPath,
 	},
@@ -270,12 +296,18 @@ service_definition: service.yaml
 			svc: &runpb.Service{
 				Name: "projects/my-proj/locations/asia-northeast1/services/my-svc",
 				Uri:  "https://my-svc-xyz.a.run.app",
+				Conditions: []*runpb.Condition{
+					{Type: "Ready", State: runpb.Condition_CONDITION_SUCCEEDED, Message: "Service ready"},
+				},
 			},
 		}),
 		gcrunpresso.WithRevisionsClient(&mockRevisionsAPI{
 			revisions: []*runpb.Revision{
 				{
 					Name: "projects/my-proj/locations/asia-northeast1/services/my-svc/revisions/rev-1",
+					Conditions: []*runpb.Condition{
+						{Type: "Ready", State: runpb.Condition_CONDITION_SUCCEEDED},
+					},
 				},
 			},
 		}),
@@ -284,24 +316,110 @@ service_definition: service.yaml
 		t.Fatalf("failed to create App: %v", err)
 	}
 
-	t.Run("status --json", func(t *testing.T) {
+	t.Run("status --json service", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		restore := gcrunpresso.SetJSONWriter(buf)
+		defer restore()
+
 		err := app.Status(t.Context(), gcrunpresso.StatusOption{JSON: true})
 		if err != nil {
 			t.Fatalf("status --json failed: %v", err)
 		}
+
+		var res map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+			t.Fatalf("failed to parse status JSON: %v, raw: %s", err, buf.String())
+		}
+		if res["name"] != "projects/my-proj/locations/asia-northeast1/services/my-svc" {
+			t.Errorf("unexpected name: %v", res["name"])
+		}
+		if res["uri"] != "https://my-svc-xyz.a.run.app" {
+			t.Errorf("unexpected uri: %v", res["uri"])
+		}
+		conds, ok := res["conditions"].([]any)
+		if !ok || len(conds) == 0 {
+			t.Fatalf("expected conditions array in status JSON: %v", res)
+		}
+		cond0 := conds[0].(map[string]any)
+		if cond0["state"] != "READY" {
+			t.Errorf("expected condition state READY, got %v", cond0["state"])
+		}
 	})
 
 	t.Run("revisions --json", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		restore := gcrunpresso.SetJSONWriter(buf)
+		defer restore()
+
 		err := app.Revisions(t.Context(), gcrunpresso.RevisionsOption{JSON: true})
 		if err != nil {
 			t.Fatalf("revisions --json failed: %v", err)
 		}
+
+		var items []map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &items); err != nil {
+			t.Fatalf("failed to parse revisions JSON: %v, raw: %s", err, buf.String())
+		}
+		if len(items) != 1 {
+			t.Fatalf("expected 1 revision item, got %d", len(items))
+		}
+		if items[0]["name"] != "rev-1" {
+			t.Errorf("expected revision name rev-1, got %v", items[0]["name"])
+		}
+		if items[0]["status"] != "READY" {
+			t.Errorf("expected revision status READY, got %v", items[0]["status"])
+		}
 	})
 
 	t.Run("diff --json", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		restore := gcrunpresso.SetJSONWriter(buf)
+		defer restore()
+
 		err := app.Diff(t.Context(), gcrunpresso.DiffOption{JSON: true})
 		if err != nil {
 			t.Fatalf("diff --json failed: %v", err)
+		}
+
+		var res map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+			t.Fatalf("failed to parse diff JSON: %v, raw: %s", err, buf.String())
+		}
+		if res["has_diff"] != true {
+			t.Errorf("expected has_diff true, got %v", res["has_diff"])
+		}
+		if diffStr, ok := res["diff"].(string); !ok || diffStr == "" {
+			t.Errorf("expected non-empty diff string, got %v", res["diff"])
+		}
+	})
+
+	t.Run("status --json job", func(t *testing.T) {
+		jobApp, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+			ConfigFilePath: jobConfigPath,
+		},
+			gcrunpresso.WithJobsClient(&mockRunJobsAPI{
+				expectedJobPath: "projects/my-proj/locations/asia-northeast1/jobs/my-job",
+			}),
+		)
+		if err != nil {
+			t.Fatalf("failed to create Job App: %v", err)
+		}
+
+		buf := &bytes.Buffer{}
+		restore := gcrunpresso.SetJSONWriter(buf)
+		defer restore()
+
+		err = jobApp.Status(t.Context(), gcrunpresso.StatusOption{JSON: true})
+		if err != nil {
+			t.Fatalf("job status --json failed: %v", err)
+		}
+
+		var res map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+			t.Fatalf("failed to parse job status JSON: %v, raw: %s", err, buf.String())
+		}
+		if res["name"] != "projects/my-proj/locations/asia-northeast1/jobs/my-job" {
+			t.Errorf("unexpected job name: %v", res["name"])
 		}
 	})
 }

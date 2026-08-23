@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -77,11 +79,17 @@ func sleepContext(ctx context.Context, d time.Duration) {
 	}
 }
 
+var defaultJSONWriter io.Writer = os.Stdout
+
 func printJSON(v any) error {
+	return printJSONTo(defaultJSONWriter, v)
+}
+
+func printJSONTo(w io.Writer, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	fmt.Println(string(b))
-	return nil
+	_, err = fmt.Fprintln(w, string(b))
+	return err
 }

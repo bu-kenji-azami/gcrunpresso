@@ -2,6 +2,7 @@ package gcrunpresso
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"time"
 
@@ -16,6 +17,7 @@ var (
 	ParseLabels             = parseLabels
 	ValidateJobSafetyGuards = validateJobSafetyGuards
 	ExitCodeFromError       = exitCodeFromError
+	ResolveExecutionPath    = resolveExecutionPath
 )
 
 func (d *App) SetLogger(logger *slog.Logger) {
@@ -36,4 +38,12 @@ func (d *App) FindPrecedingHealthyRevision(ctx context.Context, currentSvc *runp
 
 func (d *App) WarnPlaintextSecretsInEnv(containerName string, envVars []*runpb.EnvVar) {
 	d.warnPlaintextSecretsInEnv(containerName, envVars)
+}
+
+func SetJSONWriter(w io.Writer) func() {
+	prev := defaultJSONWriter
+	defaultJSONWriter = w
+	return func() {
+		defaultJSONWriter = prev
+	}
 }

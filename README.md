@@ -272,6 +272,8 @@ Scale Service min and max instances without rewriting the local manifest.
 gcrunpresso scale --min 2 --max 20
 ```
 
+> **Note:** Updating instance scaling creates a new Cloud Run revision. When traffic is pinned to specific revisions, existing traffic allocations are preserved so the newly created revision will not receive traffic unless explicitly shifted via `deploy` or `rollback`.
+
 ### `status`
 Display detailed service or job health, active URLs, traffic distribution, and conditions.
 

@@ -1,6 +1,7 @@
 package gcrunpresso_test
 
 import (
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/run/apiv2/runpb"
@@ -100,10 +101,11 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 	trueVal := true
 
 	tests := []struct {
-		name       string
-		remote     *runpb.Job
-		localOmit  *runpb.Job
-		localMatch *runpb.Job
+		name           string
+		remote         *runpb.Job
+		localOmit      *runpb.Job
+		localMatch     *runpb.Job
+		expectedSubstr string
 	}{
 		{
 			name: "BinaryAuthorization",
@@ -120,30 +122,34 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					BinauthzMethod: &runpb.BinaryAuthorization_UseDefault{UseDefault: true},
 				},
 			},
+			expectedSubstr: "binary_authorization",
 		},
 		{
 			name: "Labels",
 			remote: &runpb.Job{
 				Labels: map[string]string{"env": "prod"},
 			},
-			localOmit:  &runpb.Job{},
-			localMatch: &runpb.Job{Labels: map[string]string{"env": "prod"}},
+			localOmit:      &runpb.Job{},
+			localMatch:     &runpb.Job{Labels: map[string]string{"env": "prod"}},
+			expectedSubstr: "omits 'labels'",
 		},
 		{
 			name: "Annotations",
 			remote: &runpb.Job{
 				Annotations: map[string]string{"managed-by": "terraform"},
 			},
-			localOmit:  &runpb.Job{},
-			localMatch: &runpb.Job{Annotations: map[string]string{"managed-by": "terraform"}},
+			localOmit:      &runpb.Job{},
+			localMatch:     &runpb.Job{Annotations: map[string]string{"managed-by": "terraform"}},
+			expectedSubstr: "omits 'annotations'",
 		},
 		{
 			name: "LaunchStage",
 			remote: &runpb.Job{
 				LaunchStage: api.LaunchStage_BETA,
 			},
-			localOmit:  &runpb.Job{},
-			localMatch: &runpb.Job{LaunchStage: api.LaunchStage_BETA},
+			localOmit:      &runpb.Job{},
+			localMatch:     &runpb.Job{LaunchStage: api.LaunchStage_BETA},
+			expectedSubstr: "omits 'launch_stage'",
 		},
 		{
 			name: "ExecutionTemplate.Labels",
@@ -152,8 +158,9 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Labels: map[string]string{"app": "worker"},
 				},
 			},
-			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
-			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Labels: map[string]string{"app": "worker"}}},
+			localOmit:      &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch:     &runpb.Job{Template: &runpb.ExecutionTemplate{Labels: map[string]string{"app": "worker"}}},
+			expectedSubstr: "omits 'template.labels'",
 		},
 		{
 			name: "ExecutionTemplate.Annotations",
@@ -162,24 +169,27 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Annotations: map[string]string{"note": "critical"},
 				},
 			},
-			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
-			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Annotations: map[string]string{"note": "critical"}}},
+			localOmit:      &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch:     &runpb.Job{Template: &runpb.ExecutionTemplate{Annotations: map[string]string{"note": "critical"}}},
+			expectedSubstr: "omits 'template.annotations'",
 		},
 		{
 			name: "TaskCount",
 			remote: &runpb.Job{
 				Template: &runpb.ExecutionTemplate{TaskCount: 10},
 			},
-			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
-			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{TaskCount: 5}},
+			localOmit:      &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch:     &runpb.Job{Template: &runpb.ExecutionTemplate{TaskCount: 5}},
+			expectedSubstr: "omits 'template.task_count'",
 		},
 		{
 			name: "Parallelism",
 			remote: &runpb.Job{
 				Template: &runpb.ExecutionTemplate{Parallelism: 4},
 			},
-			localOmit:  &runpb.Job{Template: &runpb.ExecutionTemplate{}},
-			localMatch: &runpb.Job{Template: &runpb.ExecutionTemplate{Parallelism: 2}},
+			localOmit:      &runpb.Job{Template: &runpb.ExecutionTemplate{}},
+			localMatch:     &runpb.Job{Template: &runpb.ExecutionTemplate{Parallelism: 2}},
+			expectedSubstr: "omits 'template.parallelism'",
 		},
 		{
 			name: "ServiceAccount",
@@ -194,6 +204,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Template: &runpb.TaskTemplate{ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
 				},
 			},
+			expectedSubstr: "omits 'template.template.service_account'",
 		},
 		{
 			name: "VpcAccess",
@@ -208,6 +219,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Template: &runpb.TaskTemplate{VpcAccess: &runpb.VpcAccess{Connector: "projects/p/connectors/c1"}},
 				},
 			},
+			expectedSubstr: "omits 'template.template.vpc_access'",
 		},
 		{
 			name: "EncryptionKey",
@@ -222,6 +234,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Template: &runpb.TaskTemplate{EncryptionKey: "projects/p/locations/l/keyRings/r/cryptoKeys/k"},
 				},
 			},
+			expectedSubstr: "omits 'template.template.encryption_key'",
 		},
 		{
 			name: "Retries (oneof)",
@@ -240,6 +253,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					},
 				},
 			},
+			expectedSubstr: "omits 'template.template.max_retries'",
 		},
 		{
 			name: "Timeout",
@@ -254,6 +268,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					Template: &runpb.TaskTemplate{Timeout: &durationpb.Duration{Seconds: 300}},
 				},
 			},
+			expectedSubstr: "omits 'template.template.timeout'",
 		},
 		{
 			name: "ExecutionEnvironment",
@@ -272,6 +287,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					},
 				},
 			},
+			expectedSubstr: "omits 'template.template.execution_environment'",
 		},
 		{
 			name: "NodeSelector",
@@ -290,6 +306,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					},
 				},
 			},
+			expectedSubstr: "omits 'template.template.node_selector'",
 		},
 		{
 			name: "GpuZonalRedundancyDisabled",
@@ -308,6 +325,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					},
 				},
 			},
+			expectedSubstr: "omits 'template.template.gpu_zonal_redundancy_disabled'",
 		},
 		{
 			name: "Volumes",
@@ -326,14 +344,19 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 					},
 				},
 			},
+			expectedSubstr: "omits 'template.template.volumes'",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Omitting field must return an error
-			if err := gcrunpresso.ValidateJobSafetyGuards(tc.remote, tc.localOmit); err == nil {
+			// Omitting field must return an error containing the expected guard message
+			err := gcrunpresso.ValidateJobSafetyGuards(tc.remote, tc.localOmit)
+			if err == nil {
 				t.Fatalf("expected safety guard violation when %s is omitted in local manifest, got nil", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.expectedSubstr) {
+				t.Fatalf("expected safety guard error for %s to contain %q, got: %v", tc.name, tc.expectedSubstr, err)
 			}
 
 			// Specifying field must pass

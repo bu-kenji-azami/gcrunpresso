@@ -10,6 +10,7 @@ import (
 
 	loggingpb "cloud.google.com/go/logging/apiv2/loggingpb"
 	"cloud.google.com/go/logging/logadmin"
+	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/fatih/color"
 	"google.golang.org/api/iterator"
@@ -56,47 +57,13 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 	if err != nil {
 		return fmt.Errorf("failed to run job %s: %w", d.config.Job, err)
 	}
-
-	// Extract execution name from operation metadata
-	execPath := ""
-	if op != nil {
-		if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
-			execPath = md.Name
-		}
-		if execPath == "" || !strings.Contains(execPath, "/executions/") {
-			// Poll operation briefly to get execution name if not immediately populated
-			pollCtx, cancelPoll := context.WithTimeout(ctx, 10*time.Second)
-			defer cancelPoll()
-			ticker := time.NewTicker(500 * time.Millisecond)
-			defer ticker.Stop()
-		pollLoop:
-			for {
-				select {
-				case <-pollCtx.Done():
-					break pollLoop
-				case <-ticker.C:
-					if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
-						execPath = md.Name
-						break pollLoop
-					}
-					if _, err := op.Poll(pollCtx); err == nil {
-						if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
-							execPath = md.Name
-							break pollLoop
-						}
-					}
-				}
-			}
-		}
+	if op == nil {
+		return fmt.Errorf("failed to run job %s: no operation returned", d.config.Job)
 	}
-	if execPath == "" {
-		if op != nil && strings.Contains(op.Name(), "/executions/") {
-			execPath = op.Name()
-		} else if op != nil {
-			execPath = fmt.Sprintf("%s/executions/%s", d.ResourceJobPath(), arnToName(op.Name()))
-		} else {
-			execPath = fmt.Sprintf("%s/executions/exec-test", d.ResourceJobPath())
-		}
+
+	execPath, err := resolveExecutionPath(ctx, op, d.ResourceJobPath())
+	if err != nil {
+		return fmt.Errorf("failed to resolve execution path for job %s: %w", d.config.Job, err)
 	}
 	execName := arnToName(execPath)
 	d.LogInfo("job execution started", "execution", execName, "path", execPath)
@@ -439,5 +406,56 @@ func extractPayload(entry *loggingpb.LogEntry) string {
 		return fmt.Sprintf("%v", p.JsonPayload.AsMap())
 	default:
 		return fmt.Sprintf("%v", entry.Payload)
+	}
+}
+
+// resolveExecutionPath extracts or polls the execution name from a RunJob operation.
+func resolveExecutionPath(ctx context.Context, op *run.RunJobOperation, jobResourcePath string) (execPath string, err error) {
+	if op == nil {
+		return "", fmt.Errorf("operation is nil")
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			execPath = fmt.Sprintf("%s/executions", jobResourcePath)
+			err = nil
+		}
+	}()
+
+	if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+		return md.Name, nil
+	}
+
+	// Poll operation briefly to get execution name if not immediately populated
+	pollCtx, cancelPoll := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelPoll()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pollCtx.Done():
+			opName := ""
+			func() {
+				defer func() { _ = recover() }()
+				opName = op.Name()
+			}()
+			if strings.Contains(opName, "/executions/") {
+				return opName, nil
+			}
+			if opName != "" {
+				return fmt.Sprintf("%s/executions/%s", jobResourcePath, arnToName(opName)), nil
+			}
+			return fmt.Sprintf("%s/executions", jobResourcePath), nil
+		case <-ticker.C:
+			if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+				return md.Name, nil
+			}
+			if _, err := op.Poll(pollCtx); err == nil {
+				if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+					return md.Name, nil
+				}
+			}
+		}
 	}
 }

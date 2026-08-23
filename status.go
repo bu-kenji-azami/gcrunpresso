@@ -113,7 +113,7 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 	for _, c := range svc.Conditions {
 		result.Conditions = append(result.Conditions, ConditionResult{
 			Type:    c.Type,
-			State:   c.State.String(),
+			State:   formatConditionState(c.State),
 			Message: c.Message,
 		})
 	}
@@ -205,7 +205,7 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 	for _, c := range job.Conditions {
 		result.Conditions = append(result.Conditions, ConditionResult{
 			Type:    c.Type,
-			State:   c.State.String(),
+			State:   formatConditionState(c.State),
 			Message: c.Message,
 		})
 	}
@@ -294,4 +294,17 @@ func (d *App) fetchRecentEvents(ctx context.Context, filter string, limit int) [
 		})
 	}
 	return events
+}
+
+func formatConditionState(state runpb.Condition_State) string {
+	switch state {
+	case runpb.Condition_CONDITION_SUCCEEDED:
+		return "READY"
+	case runpb.Condition_CONDITION_FAILED:
+		return "FAILED"
+	case runpb.Condition_CONDITION_PENDING:
+		return "PENDING"
+	default:
+		return "UNKNOWN"
+	}
 }

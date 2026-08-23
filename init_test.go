@@ -2,11 +2,16 @@ package gcrunpresso_test
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
+	gax "github.com/googleapis/gax-go/v2"
 	"github.com/kayac/gcrunpresso/v2"
 )
 
@@ -79,5 +84,134 @@ func TestWarnPlaintextSecretsInEnv(t *testing.T) {
 	}
 	if strings.Contains(logOut, "NORMAL_CONFIG") {
 		t.Errorf("expected NO warning for NORMAL_CONFIG, got: %s", logOut)
+	}
+}
+
+type mockInitServicesAPI struct{}
+
+func (m *mockInitServicesAPI) GetService(ctx context.Context, req *runpb.GetServiceRequest, opts ...gax.CallOption) (*runpb.Service, error) {
+	return &runpb.Service{
+		Name: req.Name,
+		Template: &runpb.RevisionTemplate{
+			Containers: []*runpb.Container{
+				{Image: "gcr.io/test-project/app:v1"},
+			},
+		},
+	}, nil
+}
+func (m *mockInitServicesAPI) CreateService(ctx context.Context, req *runpb.CreateServiceRequest, opts ...gax.CallOption) (*run.CreateServiceOperation, error) {
+	return nil, nil
+}
+func (m *mockInitServicesAPI) UpdateService(ctx context.Context, req *runpb.UpdateServiceRequest, opts ...gax.CallOption) (*run.UpdateServiceOperation, error) {
+	return nil, nil
+}
+func (m *mockInitServicesAPI) DeleteService(ctx context.Context, req *runpb.DeleteServiceRequest, opts ...gax.CallOption) (*run.DeleteServiceOperation, error) {
+	return nil, nil
+}
+
+type mockInitJobsAPI struct{}
+
+func (m *mockInitJobsAPI) GetJob(ctx context.Context, req *runpb.GetJobRequest, opts ...gax.CallOption) (*runpb.Job, error) {
+	return &runpb.Job{
+		Name: req.Name,
+		Template: &runpb.ExecutionTemplate{
+			Template: &runpb.TaskTemplate{
+				Containers: []*runpb.Container{
+					{Image: "gcr.io/test-project/job:v1"},
+				},
+			},
+		},
+	}, nil
+}
+func (m *mockInitJobsAPI) CreateJob(ctx context.Context, req *runpb.CreateJobRequest, opts ...gax.CallOption) (*run.CreateJobOperation, error) {
+	return nil, nil
+}
+func (m *mockInitJobsAPI) UpdateJob(ctx context.Context, req *runpb.UpdateJobRequest, opts ...gax.CallOption) (*run.UpdateJobOperation, error) {
+	return nil, nil
+}
+func (m *mockInitJobsAPI) DeleteJob(ctx context.Context, req *runpb.DeleteJobRequest, opts ...gax.CallOption) (*run.DeleteJobOperation, error) {
+	return nil, nil
+}
+func (m *mockInitJobsAPI) RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (*run.RunJobOperation, error) {
+	return nil, nil
+}
+
+func TestInitServiceFileMode0600(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "test-project",
+		Location: "asia-northeast1",
+		Service:  "test-svc",
+	},
+		gcrunpresso.WithServicesClient(&mockInitServicesAPI{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	err = app.Init(t.Context(), gcrunpresso.InitOption{
+		Dir: tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error during init: %v", err)
+	}
+
+	svcPath := filepath.Join(tmpDir, "service.yaml")
+	fi, err := os.Stat(svcPath)
+	if err != nil {
+		t.Fatalf("failed to stat service.yaml: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0600 {
+		t.Errorf("expected service.yaml mode 0600, got %o", perm)
+	}
+
+	cfgPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	fi, err = os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("failed to stat gcrunpresso.yml: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0600 {
+		t.Errorf("expected gcrunpresso.yml mode 0600, got %o", perm)
+	}
+}
+
+func TestInitJobFileMode0600(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "test-project",
+		Location: "asia-northeast1",
+		Job:      "test-job",
+	},
+		gcrunpresso.WithJobsClient(&mockInitJobsAPI{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	err = app.Init(t.Context(), gcrunpresso.InitOption{
+		Dir: tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error during init: %v", err)
+	}
+
+	jobPath := filepath.Join(tmpDir, "job.yaml")
+	fi, err := os.Stat(jobPath)
+	if err != nil {
+		t.Fatalf("failed to stat job.yaml: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0600 {
+		t.Errorf("expected job.yaml mode 0600, got %o", perm)
+	}
+
+	cfgPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	fi, err = os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("failed to stat gcrunpresso.yml: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0600 {
+		t.Errorf("expected gcrunpresso.yml mode 0600, got %o", perm)
 	}
 }

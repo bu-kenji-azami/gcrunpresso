@@ -157,20 +157,9 @@ func setupPluginSecretManager(ctx context.Context, p ConfigPlugin, c *Config, l 
 	}
 
 	if l.VM != nil {
-		l.VM.NativeFunction(&jsonnet.NativeFunction{
-			Name:   prefix,
-			Params: []ast.Identifier{"name"},
-			Func: func(args []any) (any, error) {
-				name, ok := args[0].(string)
-				if !ok {
-					return nil, fmt.Errorf("secretmanager_ref: name must be string")
-				}
-				return refFunc(name)
-			},
-		})
-		if prefix != "secretmanager_ref" {
+		if prefix != "secret" {
 			l.VM.NativeFunction(&jsonnet.NativeFunction{
-				Name:   "secretmanager_ref",
+				Name:   prefix,
 				Params: []ast.Identifier{"name"},
 				Func: func(args []any) (any, error) {
 					name, ok := args[0].(string)
@@ -182,14 +171,21 @@ func setupPluginSecretManager(ctx context.Context, p ConfigPlugin, c *Config, l 
 			})
 		}
 		l.VM.NativeFunction(&jsonnet.NativeFunction{
-			Name:   "secret",
+			Name:   "secretmanager_ref",
 			Params: []ast.Identifier{"name"},
 			Func: func(args []any) (any, error) {
 				name, ok := args[0].(string)
 				if !ok {
-					return nil, fmt.Errorf("secret: name must be string")
+					return nil, fmt.Errorf("secretmanager_ref: name must be string")
 				}
-				return deprecatedSecretFunc(name)
+				return refFunc(name)
+			},
+		})
+		l.VM.NativeFunction(&jsonnet.NativeFunction{
+			Name:   "secret",
+			Params: []ast.Identifier{"name"},
+			Func: func(args []any) (any, error) {
+				return nil, fmt.Errorf("secret native function has been removed for security reasons, use secretmanager_ref with valueSource.secretKeyRef instead, and rotate any secrets that were previously exposed in plaintext")
 			},
 		})
 	}

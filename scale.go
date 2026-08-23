@@ -101,6 +101,10 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 	if err != nil {
 		return err
 	}
-	d.LogInfo("service scaled successfully", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
+	if isPinned {
+		d.LogInfo("service scaling updated for new revision (note: traffic remains pinned to existing revision; use deploy or rollback to adjust traffic)", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
+	} else {
+		d.LogInfo("service scaled successfully", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
+	}
 	return nil
 }

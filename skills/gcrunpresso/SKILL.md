@@ -55,6 +55,12 @@ gcrunpresso rollback
 gcrunpresso rollback --revert-service
 ```
 
+### Scaling a Service
+```bash
+# Adjust min/max instances (preserves pinned revision traffic)
+gcrunpresso scale --min 2 --max 20
+```
+
 ### Inspection & Observability
 ```bash
 # Check service status, active URLs, traffic splits, and conditions (--json supported)

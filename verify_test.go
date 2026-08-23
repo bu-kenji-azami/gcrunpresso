@@ -76,23 +76,31 @@ service_definition: service.yaml
 
 type mockSecretManagerAPI struct {
 	permDenied bool
+	notFound   bool
 }
 
 func (m *mockSecretManagerAPI) GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error) {
 	if m.permDenied {
 		return nil, status.Error(codes.PermissionDenied, "permission denied")
 	}
+	if m.notFound {
+		return nil, status.Error(codes.NotFound, "secret not found")
+	}
 	return &secretmanagerpb.Secret{Name: req.Name}, nil
 }
 
 type mockArtifactRegistryAPI struct {
 	permDenied           bool
+	notFound             bool
 	calledGetDockerImage bool
 }
 
 func (m *mockArtifactRegistryAPI) GetRepository(ctx context.Context, req *artifactregistrypb.GetRepositoryRequest, opts ...gax.CallOption) (*artifactregistrypb.Repository, error) {
 	if m.permDenied {
 		return nil, status.Error(codes.PermissionDenied, "permission denied")
+	}
+	if m.notFound {
+		return nil, status.Error(codes.NotFound, "repository not found")
 	}
 	return &artifactregistrypb.Repository{Name: req.Name}, nil
 }
@@ -101,6 +109,9 @@ func (m *mockArtifactRegistryAPI) GetDockerImage(ctx context.Context, req *artif
 	m.calledGetDockerImage = true
 	if m.permDenied {
 		return nil, status.Error(codes.PermissionDenied, "permission denied")
+	}
+	if m.notFound {
+		return nil, status.Error(codes.NotFound, "image not found")
 	}
 	return &artifactregistrypb.DockerImage{Name: req.Name}, nil
 }
@@ -200,5 +211,142 @@ service_definition: service.yaml
 
 	if !mockAR.calledGetDockerImage {
 		t.Error("expected GetDockerImage to be called for image digest reference")
+	}
+}
+
+func TestVerifyTagReferenceTreatedAsSkip(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	serviceYAML := `
+template:
+  containers:
+    - image: "asia-northeast1-docker.pkg.dev/my-proj/my-repo/app:v1.0.0"
+`
+	servicePath := filepath.Join(tmpDir, "service.yaml")
+	if err := os.WriteFile(servicePath, []byte(serviceYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configYAML := `
+project: my-proj
+location: asia-northeast1
+service: my-svc
+service_definition: service.yaml
+`
+	configPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mockAR := &mockArtifactRegistryAPI{}
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		ConfigFilePath: configPath,
+	},
+		gcrunpresso.WithArtifactRegistryClient(mockAR),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+	defer app.Close()
+
+	// Tag without digest is reported as [SKIP] and does not fail verification
+	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
+		Image: true,
+	})
+	if err != nil {
+		t.Fatalf("expected Verify to succeed (tag treated as skip), but got error: %v", err)
+	}
+}
+
+func TestVerifyImageNotFoundReturnsError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	serviceYAML := `
+template:
+  containers:
+    - image: "asia-northeast1-docker.pkg.dev/my-proj/my-repo/app@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+`
+	servicePath := filepath.Join(tmpDir, "service.yaml")
+	if err := os.WriteFile(servicePath, []byte(serviceYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configYAML := `
+project: my-proj
+location: asia-northeast1
+service: my-svc
+service_definition: service.yaml
+`
+	configPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mockAR := &mockArtifactRegistryAPI{notFound: true}
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		ConfigFilePath: configPath,
+	},
+		gcrunpresso.WithArtifactRegistryClient(mockAR),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+	defer app.Close()
+
+	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
+		Image: true,
+	})
+	if err == nil {
+		t.Fatal("expected Verify to fail for non-existent image, got nil")
+	}
+}
+
+func TestVerifySecretNotFoundReturnsError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	serviceYAML := `
+template:
+  containers:
+    - image: "asia-northeast1-docker.pkg.dev/my-proj/my-repo/app:v1"
+      env:
+        - name: "API_KEY"
+          valueSource:
+            secretKeyRef:
+              secret: "missing-secret"
+              version: "latest"
+`
+	servicePath := filepath.Join(tmpDir, "service.yaml")
+	if err := os.WriteFile(servicePath, []byte(serviceYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configYAML := `
+project: my-proj
+location: asia-northeast1
+service: my-svc
+service_definition: service.yaml
+`
+	configPath := filepath.Join(tmpDir, "gcrunpresso.yml")
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mockSM := &mockSecretManagerAPI{notFound: true}
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		ConfigFilePath: configPath,
+	},
+		gcrunpresso.WithSecretManagerClient(mockSM),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+	defer app.Close()
+
+	err = app.Verify(t.Context(), gcrunpresso.VerifyOption{
+		Image:   false,
+		Secrets: true,
+	})
+	if err == nil {
+		t.Fatal("expected Verify to fail for non-existent secret, got nil")
 	}
 }
