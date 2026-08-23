@@ -15,8 +15,8 @@ description: Comprehensive operational guide and CLI reference for gcrunpresso (
 2. **Configuration File**:
    - `gcrunpresso.yml` defines `project`, `location`, `service` (or `job`), and `service_definition` (or `job_definition`).
 3. **Template & Jsonnet Evaluation**:
-   - Template functions: `{{ env "KEY" "default" }}`, `{{ must_env "KEY" }}`, `{{ secret "name" }}`, `{{ tfstate "path" }}`, `{{ tfstate_output "name" }}`.
-   - Jsonnet native functions: `std.native("env")`, `std.native("must_env")`, `std.native("secret")`, `std.native("tfstate")`.
+   - Template functions: `{{ env "KEY" "default" }}`, `{{ must_env "KEY" }}`, `{{ secretmanager_ref "name" }}`, `{{ tfstate "path" }}`, `{{ tfstate_output "name" }}`.
+   - Jsonnet native functions: `std.native("env")`, `std.native("must_env")`, `std.native("secretmanager_ref")`, `std.native("tfstate")`.
 
 ## Common CLI Patterns
 

@@ -2,16 +2,60 @@ package gcrunpresso
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"text/tabwriter"
 
+	"cloud.google.com/go/logging/logadmin"
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/fatih/color"
+	"google.golang.org/api/iterator"
 )
 
 type StatusOption struct {
 	Events bool `help:"show recent logs and events" default:"false"`
+	JSON   bool `help:"output status in JSON format" default:"false"`
+}
+
+type ServiceStatusResult struct {
+	Name                  string              `json:"name"`
+	URI                   string              `json:"uri"`
+	LatestReadyRevision   string              `json:"latest_ready_revision"`
+	LatestCreatedRevision string              `json:"latest_created_revision"`
+	Scaling               *ScalingResult      `json:"scaling,omitempty"`
+	Traffic               []TrafficItemResult `json:"traffic"`
+	Conditions            []ConditionResult   `json:"conditions"`
+	RecentEvents          []string            `json:"recent_events,omitempty"`
+}
+
+type JobStatusResult struct {
+	Name                   string            `json:"name"`
+	TaskCount              int32             `json:"task_count"`
+	Parallelism            int32             `json:"parallelism"`
+	MaxRetries             int32             `json:"max_retries"`
+	Timeout                string            `json:"timeout,omitempty"`
+	LatestCreatedExecution string            `json:"latest_created_execution,omitempty"`
+	Conditions             []ConditionResult `json:"conditions"`
+	RecentEvents           []string          `json:"recent_events,omitempty"`
+}
+
+type ScalingResult struct {
+	MinInstanceCount int32 `json:"min_instance_count"`
+	MaxInstanceCount int32 `json:"max_instance_count"`
+}
+
+type TrafficItemResult struct {
+	Type     string `json:"type"`
+	Revision string `json:"revision"`
+	Tag      string `json:"tag,omitempty"`
+	Percent  int32  `json:"percent"`
+}
+
+type ConditionResult struct {
+	Type    string `json:"type"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
 }
 
 func (d *App) Status(ctx context.Context, opt StatusOption) error {
@@ -34,6 +78,67 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 		return fmt.Errorf("failed to get service status %s: %w", d.ResourceServicePath(), err)
 	}
 
+	result := ServiceStatusResult{
+		Name:                  svc.Name,
+		URI:                   svc.Uri,
+		LatestReadyRevision:   svc.LatestReadyRevision,
+		LatestCreatedRevision: svc.LatestCreatedRevision,
+	}
+
+	if svc.Template != nil && svc.Template.Scaling != nil {
+		result.Scaling = &ScalingResult{
+			MinInstanceCount: svc.Template.Scaling.MinInstanceCount,
+			MaxInstanceCount: svc.Template.Scaling.MaxInstanceCount,
+		}
+	}
+
+	for _, t := range svc.Traffic {
+		rev := t.Revision
+		if rev == "" && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST {
+			rev = "(latest)"
+		}
+		result.Traffic = append(result.Traffic, TrafficItemResult{
+			Type:     t.Type.String(),
+			Revision: rev,
+			Tag:      t.Tag,
+			Percent:  t.Percent,
+		})
+	}
+
+	for _, c := range svc.Conditions {
+		result.Conditions = append(result.Conditions, ConditionResult{
+			Type:    c.Type,
+			State:   c.State.String(),
+			Message: c.Message,
+		})
+	}
+
+	if opt.Events && d.logAdminClient != nil {
+		filter := fmt.Sprintf(`resource.type="cloud_run_revision" AND resource.labels.service_name="%s" AND resource.labels.location="%s"`, d.config.Service, d.config.Location)
+		it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter))
+		count := 0
+		for {
+			entry, err := it.Next()
+			if err == iterator.Done || count >= 10 {
+				break
+			}
+			if err != nil {
+				break
+			}
+			result.RecentEvents = append(result.RecentEvents, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
+			count++
+		}
+	}
+
+	if opt.JSON {
+		b, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	}
+
 	bold := color.New(color.Bold)
 	green := color.New(color.FgGreen)
 	red := color.New(color.FgRed)
@@ -43,20 +148,16 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 	fmt.Printf("Latest Ready Revision:   %s\n", svc.LatestReadyRevision)
 	fmt.Printf("Latest Created Revision: %s\n\n", svc.LatestCreatedRevision)
 
-	if svc.Template != nil && svc.Template.Scaling != nil {
-		fmt.Printf("Scaling: min=%d, max=%d\n\n", svc.Template.Scaling.MinInstanceCount, svc.Template.Scaling.MaxInstanceCount)
+	if result.Scaling != nil {
+		fmt.Printf("Scaling: min=%d, max=%d\n\n", result.Scaling.MinInstanceCount, result.Scaling.MaxInstanceCount)
 	}
 
 	// Traffic Table
 	bold.Println("Traffic Allocations:")
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, ' ', 0)
 	fmt.Fprintln(w, "TYPE\tREVISION\tTAG\tPERCENT")
-	for _, t := range svc.Traffic {
-		rev := t.Revision
-		if rev == "" && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST {
-			rev = "(latest)"
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\n", t.Type, rev, t.Tag, t.Percent)
+	for _, t := range result.Traffic {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\n", t.Type, t.Revision, t.Tag, t.Percent)
 	}
 	w.Flush()
 	fmt.Println()
@@ -76,6 +177,14 @@ func (d *App) statusService(ctx context.Context, opt StatusOption) error {
 	}
 	w.Flush()
 
+	if len(result.RecentEvents) > 0 {
+		fmt.Println()
+		bold.Println("Recent Events:")
+		for _, ev := range result.RecentEvents {
+			fmt.Printf("  %s\n", ev)
+		}
+	}
+
 	return nil
 }
 
@@ -85,6 +194,58 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get job status %s: %w", d.ResourceJobPath(), err)
+	}
+
+	result := JobStatusResult{
+		Name: job.Name,
+	}
+
+	if job.Template != nil {
+		result.TaskCount = job.Template.TaskCount
+		result.Parallelism = job.Template.Parallelism
+		if job.Template.Template != nil {
+			result.MaxRetries = job.Template.Template.GetMaxRetries()
+			if job.Template.Template.Timeout != nil {
+				result.Timeout = job.Template.Template.Timeout.AsDuration().String()
+			}
+		}
+	}
+	if job.LatestCreatedExecution != nil {
+		result.LatestCreatedExecution = job.LatestCreatedExecution.Name
+	}
+
+	for _, c := range job.Conditions {
+		result.Conditions = append(result.Conditions, ConditionResult{
+			Type:    c.Type,
+			State:   c.State.String(),
+			Message: c.Message,
+		})
+	}
+
+	if opt.Events && d.logAdminClient != nil {
+		filter := fmt.Sprintf(`resource.type="cloud_run_job" AND resource.labels.job_name="%s" AND resource.labels.location="%s"`, d.config.Job, d.config.Location)
+		it := d.logAdminClient.Entries(ctx, logadmin.Filter(filter))
+		count := 0
+		for {
+			entry, err := it.Next()
+			if err == iterator.Done || count >= 10 {
+				break
+			}
+			if err != nil {
+				break
+			}
+			result.RecentEvents = append(result.RecentEvents, fmt.Sprintf("%s: %v", entry.Timestamp.Format("15:04:05"), entry.Payload))
+			count++
+		}
+	}
+
+	if opt.JSON {
+		b, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
 	}
 
 	bold := color.New(color.Bold)
@@ -121,6 +282,14 @@ func (d *App) statusJob(ctx context.Context, opt StatusOption) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", statusStr, c.Type, c.Message)
 	}
 	w.Flush()
+
+	if len(result.RecentEvents) > 0 {
+		fmt.Println()
+		bold.Println("Recent Events:")
+		for _, ev := range result.RecentEvents {
+			fmt.Printf("  %s\n", ev)
+		}
+	}
 
 	return nil
 }

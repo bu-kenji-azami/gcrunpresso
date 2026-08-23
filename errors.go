@@ -2,6 +2,7 @@ package gcrunpresso
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"google.golang.org/api/googleapi"
@@ -31,6 +32,26 @@ type ErrPermissionDenied string
 
 func (e ErrPermissionDenied) Error() string {
 	return string(e)
+}
+
+type ExitCodeError struct {
+	Code int
+	Err  error
+}
+
+func (e *ExitCodeError) Error() string {
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return fmt.Sprintf("exit code %d", e.Code)
+}
+
+func (e *ExitCodeError) ExitCode() int {
+	return e.Code
+}
+
+func (e *ExitCodeError) Unwrap() error {
+	return e.Err
 }
 
 var (

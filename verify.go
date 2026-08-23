@@ -2,13 +2,13 @@ package gcrunpresso
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
-	artifactregistry "cloud.google.com/go/artifactregistry/apiv1"
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/run/apiv2/runpb"
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/fatih/color"
 )
@@ -16,6 +16,14 @@ import (
 type VerifyOption struct {
 	Image   bool `help:"verify container images existence" default:"true" negatable:""`
 	Secrets bool `help:"verify secret manager secrets existence" default:"true" negatable:""`
+	JSON    bool `help:"output verification results in JSON format" default:"false"`
+}
+
+type VerifyItemResult struct {
+	Type    string `json:"type"`
+	Target  string `json:"target"`
+	Status  string `json:"status"` // OK, SKIP, FAIL
+	Message string `json:"message,omitempty"`
 }
 
 func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
@@ -40,33 +48,111 @@ func (d *App) Verify(ctx context.Context, opt VerifyOption) error {
 		return fmt.Errorf("either service or job must be specified to verify")
 	}
 
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-
+	var results []VerifyItemResult
 	var failedCount int
 
 	if opt.Image && len(images) > 0 {
-		fmt.Println("Verifying Container Images:")
 		for _, img := range images {
 			err := d.verifyImage(ctx, img)
 			if err != nil {
-				fmt.Printf("  %s %s (%v)\n", red.Sprint("[FAIL]"), img, err)
-				failedCount++
+				if _, isSkip := err.(ErrSkipVerify); isSkip {
+					results = append(results, VerifyItemResult{
+						Type:    "image",
+						Target:  img,
+						Status:  "SKIP",
+						Message: err.Error(),
+					})
+				} else {
+					failedCount++
+					results = append(results, VerifyItemResult{
+						Type:    "image",
+						Target:  img,
+						Status:  "FAIL",
+						Message: err.Error(),
+					})
+				}
 			} else {
-				fmt.Printf("  %s %s\n", green.Sprint("[OK]"), img)
+				results = append(results, VerifyItemResult{
+					Type:   "image",
+					Target: img,
+					Status: "OK",
+				})
 			}
 		}
 	}
 
 	if opt.Secrets && len(secrets) > 0 {
-		fmt.Println("Verifying Secret Manager Secrets:")
 		for _, sec := range secrets {
 			err := d.verifySecret(ctx, sec)
 			if err != nil {
-				fmt.Printf("  %s %s (%v)\n", red.Sprint("[FAIL]"), sec, err)
-				failedCount++
+				if _, isSkip := err.(ErrSkipVerify); isSkip {
+					results = append(results, VerifyItemResult{
+						Type:    "secret",
+						Target:  sec,
+						Status:  "SKIP",
+						Message: err.Error(),
+					})
+				} else {
+					failedCount++
+					results = append(results, VerifyItemResult{
+						Type:    "secret",
+						Target:  sec,
+						Status:  "FAIL",
+						Message: err.Error(),
+					})
+				}
 			} else {
-				fmt.Printf("  %s %s\n", green.Sprint("[OK]"), sec)
+				results = append(results, VerifyItemResult{
+					Type:   "secret",
+					Target: sec,
+					Status: "OK",
+				})
+			}
+		}
+	}
+
+	if opt.JSON {
+		b, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+	} else {
+		green := color.New(color.FgGreen)
+		yellow := color.New(color.FgYellow)
+		red := color.New(color.FgRed)
+
+		if opt.Image && len(images) > 0 {
+			fmt.Println("Verifying Container Images:")
+			for _, r := range results {
+				if r.Type != "image" {
+					continue
+				}
+				switch r.Status {
+				case "OK":
+					fmt.Printf("  %s %s\n", green.Sprint("[OK]"), r.Target)
+				case "SKIP":
+					fmt.Printf("  %s %s (%s)\n", yellow.Sprint("[SKIP]"), r.Target, r.Message)
+				case "FAIL":
+					fmt.Printf("  %s %s (%s)\n", red.Sprint("[FAIL]"), r.Target, r.Message)
+				}
+			}
+		}
+
+		if opt.Secrets && len(secrets) > 0 {
+			fmt.Println("Verifying Secret Manager Secrets:")
+			for _, r := range results {
+				if r.Type != "secret" {
+					continue
+				}
+				switch r.Status {
+				case "OK":
+					fmt.Printf("  %s %s\n", green.Sprint("[OK]"), r.Target)
+				case "SKIP":
+					fmt.Printf("  %s %s (%s)\n", yellow.Sprint("[SKIP]"), r.Target, r.Message)
+				case "FAIL":
+					fmt.Printf("  %s %s (%s)\n", red.Sprint("[FAIL]"), r.Target, r.Message)
+				}
 			}
 		}
 	}
@@ -137,21 +223,31 @@ func (d *App) verifyImage(ctx context.Context, image string) error {
 			repo := parts[2]
 			pkgAndTag := parts[3]
 
-			pkg := pkgAndTag
-			if idx := strings.IndexAny(pkgAndTag, ":@"); idx != -1 {
-				pkg = pkgAndTag[:idx]
-			}
-
-			repoPath := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", proj, loc, repo)
 			if d.arClient != nil {
-				_, err := d.arClient.GetRepository(ctx, &artifactregistrypb.GetRepositoryRequest{
+				repoPath := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", proj, loc, repo)
+				// First check docker image if tag/digest is present
+				dockerImgPath := fmt.Sprintf("%s/dockerImages/%s", repoPath, strings.ReplaceAll(pkgAndTag, ":", "@"))
+				_, err := d.arClient.GetDockerImage(ctx, &artifactregistrypb.GetDockerImageRequest{
+					Name: dockerImgPath,
+				})
+				if err == nil {
+					return nil
+				}
+				if isPermissionError(err) {
+					return ErrSkipVerify(fmt.Sprintf("permission denied checking image %s", dockerImgPath))
+				}
+
+				// Fallback to checking repository existence
+				_, repoErr := d.arClient.GetRepository(ctx, &artifactregistrypb.GetRepositoryRequest{
 					Name: repoPath,
 				})
-				if err != nil && !isPermissionError(err) {
-					return fmt.Errorf("artifact registry repository %s not found: %w", repoPath, err)
+				if repoErr != nil {
+					if isPermissionError(repoErr) {
+						return ErrSkipVerify(fmt.Sprintf("permission denied checking repository %s", repoPath))
+					}
+					return fmt.Errorf("artifact registry repository %s not found: %w", repoPath, repoErr)
 				}
 			}
-			_ = pkg
 		}
 	}
 	return nil
@@ -167,14 +263,14 @@ func (d *App) verifySecret(ctx context.Context, secretName string) error {
 		_, err := d.secretClient.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{
 			Name: secretPath,
 		})
-		if err != nil && !isPermissionError(err) {
+		if err != nil {
+			if isPermissionError(err) {
+				return ErrSkipVerify(fmt.Sprintf("permission denied accessing secret %s", secretPath))
+			}
 			return fmt.Errorf("secret %s not accessible: %w", secretPath, err)
 		}
 	}
 	return nil
 }
 
-var (
-	_ *artifactregistry.Client
-	_ *secretmanager.Client
-)
+var _ = os.Stdout

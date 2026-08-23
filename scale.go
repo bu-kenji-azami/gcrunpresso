@@ -36,6 +36,7 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 	if template == nil {
 		template = &runpb.RevisionTemplate{}
 	}
+	template.Revision = "" // Clear template.revision to avoid collision
 	if template.Scaling == nil {
 		template.Scaling = &runpb.RevisionScaling{}
 	}
@@ -55,12 +56,27 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 		Template: template,
 	}
 
-	if opt.NoTraffic && remoteSvc.LatestReadyRevision != "" {
+	// Traffic handling (#22, N3, D10)
+	isPinned := false
+	for _, t := range remoteSvc.Traffic {
+		if t != nil && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION && t.Revision != "" {
+			isPinned = true
+			break
+		}
+	}
+
+	if opt.NoTraffic {
+		if len(remoteSvc.Traffic) > 0 {
+			svcUpdate.Traffic = remoteSvc.Traffic
+			updateMaskPaths = append(updateMaskPaths, "traffic")
+		}
+	} else if isPinned {
+		// Traffic was pinned to specific revision; shift to LATEST so the new scaled revision receives traffic, with warning
+		d.LogWarn("remote service traffic is pinned to specific revision(s); re-routing 100% traffic to LATEST to ensure scaled revision receives traffic")
 		svcUpdate.Traffic = []*runpb.TrafficTarget{
 			{
-				Type:     runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION,
-				Revision: remoteSvc.LatestReadyRevision,
-				Percent:  100,
+				Type:    runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST,
+				Percent: 100,
 			},
 		}
 		updateMaskPaths = append(updateMaskPaths, "traffic")
@@ -84,7 +100,9 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 	if err != nil {
 		return fmt.Errorf("failed to scale service %s: %w", d.config.Service, err)
 	}
-	d.LogInfo("scale operation started, waiting for completion", "op", op.Name())
+	if op != nil {
+		d.LogInfo("scale operation started, waiting for completion", "op", op.Name())
+	}
 
 	readySvc, err := d.WaitForServiceReady(ctx, d.ResourceServicePath())
 	if err != nil {

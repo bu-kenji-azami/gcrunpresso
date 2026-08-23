@@ -2,6 +2,7 @@ package gcrunpresso
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 
 type DiffOption struct {
 	ExitCode bool `help:"exit with code 1 if differences are found" default:"false"`
+	JSON     bool `help:"output diff in JSON format" default:"false"`
 }
 
 func (d *App) Diff(ctx context.Context, opt DiffOption) error {
@@ -31,6 +33,22 @@ func (d *App) Diff(ctx context.Context, opt DiffOption) error {
 
 	if err != nil {
 		return err
+	}
+
+	if opt.JSON {
+		res := map[string]any{
+			"has_diff": diffText != "",
+			"diff":     diffText,
+		}
+		b, err := json.MarshalIndent(res, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		if diffText != "" && opt.ExitCode {
+			return fmt.Errorf("differences found")
+		}
+		return nil
 	}
 
 	if diffText == "" {
@@ -153,7 +171,7 @@ func CleanRemoteService(remote, local *runpb.Service) *runpb.Service {
 	clone.ThreatDetectionEnabled = false
 
 	if clone.Template != nil {
-		if local != nil && local.Template != nil && local.Template.Revision == "" {
+		if local == nil || (local.Template != nil && local.Template.Revision == "") {
 			clone.Template.Revision = ""
 		}
 	}

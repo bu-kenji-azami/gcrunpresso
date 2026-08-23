@@ -3,10 +3,10 @@ package gcrunpresso
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"cloud.google.com/go/run/apiv2/runpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -48,30 +48,35 @@ func (d *App) Rollback(ctx context.Context, opt RollbackOption) error {
 }
 
 func (d *App) findPrecedingHealthyRevision(ctx context.Context, currentSvc *runpb.Service) (string, error) {
-	it := d.revisionsClient.ListRevisions(ctx, &runpb.ListRevisionsRequest{
+	revisions, err := d.revisionsClient.ListRevisions(ctx, &runpb.ListRevisionsRequest{
 		Parent: d.ResourceServicePath(),
 	})
-
-	var revisions []*runpb.Revision
-	for {
-		rev, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("failed to list revisions: %w", err)
-		}
-		revisions = append(revisions, rev)
+	if err != nil {
+		return "", fmt.Errorf("failed to list revisions: %w", err)
 	}
 
 	if len(revisions) < 2 {
 		return "", fmt.Errorf("service %s has fewer than 2 revisions, cannot rollback automatically", currentSvc.Name)
 	}
 
-	// Find the first revision that is ready and different from latest ready revision
+	// Sort revisions strictly by CreateTime descending (D15)
+	sort.Slice(revisions, func(i, j int) bool {
+		t1 := revisions[i].GetCreateTime().AsTime()
+		t2 := revisions[j].GetCreateTime().AsTime()
+		return t1.After(t2)
+	})
+
+	// Exclude all currently serving revisions (D1, J1)
+	servingRevs := FindServingRevisions(currentSvc)
+	servingMap := make(map[string]struct{})
+	for _, r := range servingRevs {
+		servingMap[r] = struct{}{}
+	}
+
+	// Find the first revision that is ready and not currently serving
 	for _, rev := range revisions {
 		shortName := arnToName(rev.Name)
-		if shortName == currentSvc.LatestReadyRevision {
+		if _, isServing := servingMap[shortName]; isServing {
 			continue
 		}
 		// Check if revision is healthy / ready
@@ -87,8 +92,7 @@ func (d *App) findPrecedingHealthyRevision(ctx context.Context, currentSvc *runp
 		}
 	}
 
-	// Fallback to second revision in list
-	return arnToName(revisions[1].Name), nil
+	return "", fmt.Errorf("no preceding healthy revision found for service %s", currentSvc.Name)
 }
 
 func (d *App) rollbackTrafficOnly(ctx context.Context, currentSvc *runpb.Service, targetRev string, opt RollbackOption) error {
@@ -121,7 +125,9 @@ func (d *App) rollbackTrafficOnly(ctx context.Context, currentSvc *runpb.Service
 	if err != nil {
 		return fmt.Errorf("failed to update service traffic for rollback: %w", err)
 	}
-	d.LogInfo("traffic update operation started, waiting for completion", "op", op.Name())
+	if op != nil {
+		d.LogInfo("traffic update operation started, waiting for completion", "op", op.Name())
+	}
 
 	readySvc, err := d.WaitForServiceReady(ctx, d.ResourceServicePath())
 	if err != nil {
@@ -140,7 +146,7 @@ func (d *App) rollbackRevertTemplate(ctx context.Context, currentSvc *runpb.Serv
 		return fmt.Errorf("failed to get target revision %s: %w", targetRevPath, err)
 	}
 
-	// Build RevisionTemplate from target Revision (R9)
+	// Build RevisionTemplate from target Revision (R9, #9)
 	template := &runpb.RevisionTemplate{
 		Containers:                    targetRev.Containers,
 		Volumes:                       targetRev.Volumes,
@@ -149,6 +155,12 @@ func (d *App) rollbackRevertTemplate(ctx context.Context, currentSvc *runpb.Serv
 		VpcAccess:                     targetRev.VpcAccess,
 		Timeout:                       targetRev.Timeout,
 		MaxInstanceRequestConcurrency: targetRev.MaxInstanceRequestConcurrency,
+		Labels:                        targetRev.Labels,
+		Annotations:                   targetRev.Annotations,
+		ExecutionEnvironment:          targetRev.ExecutionEnvironment,
+		EncryptionKey:                 targetRev.EncryptionKey,
+		SessionAffinity:               targetRev.SessionAffinity,
+		NodeSelector:                  targetRev.NodeSelector,
 	}
 	if currentSvc.Template != nil {
 		template.HealthCheckDisabled = currentSvc.Template.HealthCheckDisabled
@@ -183,7 +195,9 @@ func (d *App) rollbackRevertTemplate(ctx context.Context, currentSvc *runpb.Serv
 	if err != nil {
 		return fmt.Errorf("failed to update service template for rollback: %w", err)
 	}
-	d.LogInfo("template revert operation started, waiting for completion", "op", op.Name())
+	if op != nil {
+		d.LogInfo("template revert operation started, waiting for completion", "op", op.Name())
+	}
 
 	readySvc, err := d.WaitForServiceReady(ctx, d.ResourceServicePath())
 	if err != nil {

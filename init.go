@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/goccy/go-yaml"
@@ -40,6 +41,11 @@ func (d *App) initService(ctx context.Context, opt InitOption) error {
 	}
 
 	cleanedSvc := CleanRemoteService(remoteSvc, nil)
+	if remoteSvc.Template != nil {
+		for _, c := range remoteSvc.Template.Containers {
+			d.warnPlaintextSecretsInEnv(c.Name, c.Env)
+		}
+	}
 	svcYAML, err := MarshalProtoYAML(cleanedSvc)
 	if err != nil {
 		return fmt.Errorf("failed to format service YAML: %w", err)
@@ -90,6 +96,11 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 	}
 
 	cleanedJob := CleanRemoteJob(remoteJob, nil)
+	if remoteJob.Template != nil && remoteJob.Template.Template != nil {
+		for _, c := range remoteJob.Template.Template.Containers {
+			d.warnPlaintextSecretsInEnv(c.Name, c.Env)
+		}
+	}
 	jobYAML, err := MarshalProtoYAML(cleanedJob)
 	if err != nil {
 		return fmt.Errorf("failed to format job YAML: %w", err)
@@ -129,4 +140,26 @@ func (d *App) initJob(ctx context.Context, opt InitOption) error {
 	d.LogInfo("wrote gcrunpresso config", "file", cfgFilePath)
 
 	return nil
+}
+
+var sensitiveKeywords = []string{
+	"SECRET", "PASSWORD", "KEY", "TOKEN", "CREDENTIAL", "API_KEY", "AUTH",
+}
+
+func (d *App) warnPlaintextSecretsInEnv(containerName string, envVars []*runpb.EnvVar) {
+	for _, env := range envVars {
+		if env == nil {
+			continue
+		}
+		if vs := env.GetValueSource(); vs != nil && vs.GetSecretKeyRef() != nil {
+			continue // Already using Secret Manager reference
+		}
+		upper := strings.ToUpper(env.Name)
+		for _, kw := range sensitiveKeywords {
+			if strings.Contains(upper, kw) {
+				d.LogWarn("plaintext credential detected in environment variable; consider using Secret Manager with valueSource.secretKeyRef", "container", containerName, "env", env.Name)
+				break
+			}
+		}
+	}
 }

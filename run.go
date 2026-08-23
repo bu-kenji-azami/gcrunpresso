@@ -18,13 +18,12 @@ import (
 )
 
 type RunOption struct {
-	Args        []string `help:"container argument overrides" default:""`
-	Env         []string `help:"environment variable overrides (KEY=VALUE)" default:""`
-	Tasks       int32    `help:"number of tasks to execute" default:"0"`
-	Parallelism int32    `help:"maximum number of tasks to execute concurrently" default:"0"`
-	Wait        bool     `help:"wait for execution to complete" default:"true" negatable:""`
-	Follow      bool     `help:"stream logs in real-time" default:"true" negatable:""`
-	DryRun      bool     `help:"dry run" default:"false"`
+	OverrideArgs []string `name:"override-args" aliases:"args" help:"container argument overrides" default:""`
+	OverrideEnv  []string `name:"override-env" aliases:"env" help:"environment variable overrides (KEY=VALUE)" default:""`
+	Tasks        int32    `help:"number of tasks to execute" default:"0"`
+	Wait         bool     `help:"wait for execution to complete" default:"true" negatable:""`
+	Follow       bool     `help:"stream logs in real-time" default:"true" negatable:""`
+	DryRun       bool     `help:"dry run" default:"false"`
 }
 
 func (d *App) Run(ctx context.Context, opt RunOption) error {
@@ -58,20 +57,48 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 		return fmt.Errorf("failed to run job %s: %w", d.config.Job, err)
 	}
 
-	// Extract execution name from operation metadata or operation name
+	// Extract execution name from operation metadata
 	execPath := ""
-	if md, err := op.Metadata(); err == nil && md != nil {
+	if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
 		execPath = md.Name
 	}
+	if execPath == "" || !strings.Contains(execPath, "/executions/") {
+		// Poll operation briefly to get execution name if not immediately populated
+		pollCtx, cancelPoll := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelPoll()
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+	pollLoop:
+		for {
+			select {
+			case <-pollCtx.Done():
+				break pollLoop
+			case <-ticker.C:
+				if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+					execPath = md.Name
+					break pollLoop
+				}
+				if _, err := op.Poll(pollCtx); err == nil {
+					if md, err := op.Metadata(); err == nil && md != nil && md.Name != "" {
+						execPath = md.Name
+						break pollLoop
+					}
+				}
+			}
+		}
+	}
 	if execPath == "" {
-		// Fallback: wait briefly for operation to obtain execution metadata
-		execPath = op.Name()
+		if strings.Contains(op.Name(), "/executions/") {
+			execPath = op.Name()
+		} else {
+			execPath = fmt.Sprintf("%s/executions/%s", d.ResourceJobPath(), arnToName(op.Name()))
+		}
 	}
 	execName := arnToName(execPath)
 	d.LogInfo("job execution started", "execution", execName, "path", execPath)
 
-	if !opt.Wait && !opt.Follow {
-		d.LogInfo("job triggered asynchronously (--no-wait specified)", "execution", execName)
+	if !opt.Wait {
+		d.LogInfo("job triggered asynchronously (--wait=false specified)", "execution", execName, "path", execPath)
 		return nil
 	}
 
@@ -81,7 +108,7 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	logStreamCtx, cancelLogStream := context.WithCancel(execCtx)
+	logStreamCtx, cancelLogStream := context.WithCancel(ctx)
 
 	if opt.Follow {
 		wg.Add(1)
@@ -94,16 +121,80 @@ func (d *App) Run(ctx context.Context, opt RunOption) error {
 	// Monitor execution status
 	execErr := d.monitorExecution(execCtx, execPath)
 
-	// Stop log streaming once execution finishes
-	cancelLogStream()
-	wg.Wait()
+	// Stop log streaming with safe drain window derived from root ctx (N6)
+	if opt.Follow {
+		drainCtx, cancelDrain := context.WithTimeout(ctx, 30*time.Second)
+		defer cancelDrain()
 
-	return execErr
+		drainDone := make(chan struct{})
+		go func() {
+			time.Sleep(3 * time.Second)
+			cancelLogStream()
+			wg.Wait()
+			close(drainDone)
+		}()
+
+		select {
+		case <-drainCtx.Done():
+			cancelLogStream()
+			wg.Wait()
+		case <-drainDone:
+		}
+	} else {
+		cancelLogStream()
+	}
+
+	// Fetch task exit codes via tasksClient
+	taskCtx, cancelTask := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelTask()
+
+	tasks, listErr := d.tasksClient.ListTasks(taskCtx, &runpb.ListTasksRequest{
+		Parent: execPath,
+	})
+	if listErr != nil {
+		d.LogWarn("failed to list tasks for execution exit codes", "error", listErr)
+	}
+
+	return ExtractMaxExitCode(tasks, execErr)
+}
+
+// ExtractMaxExitCode computes the highest non-zero exit code across tasks.
+func ExtractMaxExitCode(tasks []*runpb.Task, execErr error) error {
+	var maxExitCode int32
+	var hasTaskExitCode bool
+
+	for _, t := range tasks {
+		if t != nil && t.LastAttemptResult != nil {
+			hasTaskExitCode = true
+			if t.LastAttemptResult.ExitCode > maxExitCode {
+				maxExitCode = t.LastAttemptResult.ExitCode
+			}
+		}
+	}
+
+	if execErr != nil {
+		if maxExitCode > 0 {
+			return &ExitCodeError{Code: int(maxExitCode), Err: execErr}
+		}
+		return &ExitCodeError{Code: 1, Err: execErr}
+	}
+
+	if maxExitCode > 0 {
+		return &ExitCodeError{Code: int(maxExitCode), Err: fmt.Errorf("job completed with task exit code %d", maxExitCode)}
+	}
+
+	if !hasTaskExitCode && execErr != nil {
+		return &ExitCodeError{Code: 1, Err: execErr}
+	}
+
+	return nil
 }
 
 // BuildJobOverrides converts RunOption into runpb.RunJobRequest_Overrides.
 func BuildJobOverrides(opt RunOption) (*runpb.RunJobRequest_Overrides, error) {
-	if len(opt.Args) == 0 && len(opt.Env) == 0 && opt.Tasks == 0 {
+	args := opt.OverrideArgs
+	env := opt.OverrideEnv
+	if len(args) == 0 && len(env) == 0 && opt.Tasks == 0 {
 		return nil, nil
 	}
 
@@ -113,18 +204,18 @@ func BuildJobOverrides(opt RunOption) (*runpb.RunJobRequest_Overrides, error) {
 	}
 
 	var containerOverride *runpb.RunJobRequest_Overrides_ContainerOverride
-	if len(opt.Args) > 0 {
+	if len(args) > 0 {
 		if containerOverride == nil {
 			containerOverride = &runpb.RunJobRequest_Overrides_ContainerOverride{}
 		}
-		containerOverride.Args = opt.Args
+		containerOverride.Args = args
 	}
 
-	if len(opt.Env) > 0 {
+	if len(env) > 0 {
 		if containerOverride == nil {
 			containerOverride = &runpb.RunJobRequest_Overrides_ContainerOverride{}
 		}
-		for _, e := range opt.Env {
+		for _, e := range env {
 			kv := strings.SplitN(e, "=", 2)
 			if len(kv) != 2 {
 				return nil, fmt.Errorf("invalid environment variable override %q: must be KEY=VALUE", e)
@@ -196,18 +287,19 @@ func (d *App) streamExecutionLogs(ctx context.Context, execName string) {
 
 	d.LogInfo("starting log stream", "filter", filter)
 
+	var lastSeen time.Time
 	// Primary: TailLogEntries gRPC streaming (KTD3)
-	err := d.tailLogStream(ctx, filter)
+	err := d.tailLogStream(ctx, filter, &lastSeen)
 	if err == nil || ctx.Err() != nil {
 		return
 	}
 
 	d.LogWarn("TailLogEntries stream ended or unsupported, falling back to logadmin polling", "error", err)
 	// Fallback: logadmin polling
-	d.pollLogAdmin(ctx, filter)
+	d.pollLogAdmin(ctx, filter, lastSeen)
 }
 
-func (d *App) tailLogStream(ctx context.Context, filter string) error {
+func (d *App) tailLogStream(ctx context.Context, filter string, lastSeen *time.Time) error {
 	if d.logTailClient == nil {
 		return fmt.Errorf("log tail client not initialized")
 	}
@@ -241,13 +333,16 @@ func (d *App) tailLogStream(ctx context.Context, filter string) error {
 				return err
 			}
 			for _, entry := range resp.Entries {
+				if entry.Timestamp != nil && entry.Timestamp.AsTime().After(*lastSeen) {
+					*lastSeen = entry.Timestamp.AsTime()
+				}
 				printLogEntry(dim, entry.Timestamp, entry.Labels["run.googleapis.com/task_index"], extractPayload(entry))
 			}
 		}
 	}
 }
 
-func (d *App) pollLogAdmin(ctx context.Context, filter string) {
+func (d *App) pollLogAdmin(ctx context.Context, filter string, lastSeen time.Time) {
 	if d.logAdminClient == nil {
 		return
 	}
@@ -256,7 +351,6 @@ func (d *App) pollLogAdmin(ctx context.Context, filter string) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	var lastSeen time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -274,6 +368,7 @@ func (d *App) pollLogAdmin(ctx context.Context, filter string) {
 					break
 				}
 				if err != nil {
+					d.LogWarn("failed to poll log entries", "error", err)
 					break
 				}
 				if entry.Timestamp.After(lastSeen) {

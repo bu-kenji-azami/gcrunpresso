@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ecspresso is a deployment tool for Amazon ECS written in Go. It manages ECS services through configuration files (YAML, JSON, or Jsonnet) that define task definitions and service definitions.
+gcrunpresso is a deployment management tool for Google Cloud Run (Services and Jobs) written in Go. It manages Cloud Run resources through declarative configuration files (YAML, JSON, or Jsonnet).
 
 ## Git Workflow
 
 - Default branch: `v2`
 - Do not commit directly to `v2`. Always create a feature branch first.
-- When changing `action.yml`, force-push the same commit to the `v2-action-testing` branch as well. CI for the GitHub Action runs against that branch, so pushing there is how `action.yml` changes get exercised end-to-end.
+- When changing `action.yml`, test via the GitHub Actions composite action.
 
 ## Build Commands
 
@@ -38,45 +38,41 @@ make packages
 
 ### Core Components
 
-- **App** (`ecspresso.go`): Main application struct that holds AWS clients (ECS, CodeDeploy, CloudWatch Logs, IAM, etc.) and orchestrates operations
-- **Config** (`config.go`): Configuration loading and validation. Supports YAML, JSON, and Jsonnet formats with template functions
-- **CLI** (`cli.go`, `cliv2.go`): Command-line interface using Kong. Each subcommand (deploy, run, diff, etc.) has its own option struct and handler
+- **App** (`gcrunpresso.go`): Main application struct that holds GCP GAPIC clients (Cloud Run Services/Jobs/Tasks/Revisions/Executions, Secret Manager, Artifact Registry, Cloud Logging) and orchestrates operations
+- **Config** (`config.go`): Configuration loading and validation with 3-tier precedence (`CLI > YAML > ENV`). Supports YAML, JSON, and Jsonnet formats with template functions
+- **CLI** (`cli.go`, `cliv2.go`): Command-line interface using Kong. Each subcommand (deploy, run, rollback, scale, status, revisions, executions, diff, verify, init, render, wait, delete) has its own option struct and handler
 
 ### Command Structure
 
 Commands are defined as option structs in their respective files:
-- `deploy.go` - Deploy/update ECS services (rolling update, Blue/Green via ECS or CodeDeploy)
-- `run.go` - Run standalone ECS tasks
-- `rollback.go` - Rollback to previous task definition
-- `diff.go` - Show differences between local and remote definitions
-- `verify.go` - Validate configurations and AWS resources
-- `init.go` - Generate config from existing ECS service
+- `deploy.go` - Deploy/update Cloud Run Services and Jobs with safety guards and traffic management
+- `run.go` - Execute Cloud Run Jobs with real-time log streaming and container overrides
+- `rollback.go` - Rollback Cloud Run Service traffic or revert template to preceding healthy revision
+- `scale.go` - Adjust min/max instance scaling
+- `status.go` - Display service/job readiness, traffic split, and recent Cloud Logging events
+- `revisions.go` - List service revisions with traffic allocation and health status
+- `executions.go` - List job executions with task counts and completion status
+- `diff.go` - Show semantic diff between local definition and remote Cloud Run resource
+- `verify.go` - Validate container image availability (Artifact Registry) and secrets (Secret Manager)
+- `init.go` - Generate configuration and YAML definitions from existing Cloud Run resources
 
 ### Template System
 
 Definition files support Go template syntax via `github.com/kayac/go-config`:
 - `{{ env "VAR" "default" }}` - Environment variable with default
 - `{{ must_env "VAR" }}` - Required environment variable
-- `{{ tfstate "resource.attr" }}` - Terraform state lookup (plugin)
+- `{{ secretmanager_ref "secret-name" }}` - Returns Secret Manager resource string (`projects/{project}/secrets/{name}`) for `valueSource.secretKeyRef`
 
 ### Plugin System (`plugin.go`)
 
 Plugins extend template functions and Jsonnet native functions:
+- `secretmanager` - Secret Manager pure string reference generation (`secretmanager_ref`)
 - `tfstate` - Terraform state lookups
-- `cloudformation` - CloudFormation output/export lookups
-- `ssm` - SSM Parameter Store lookups
-- `secretsmanager` - Secrets Manager ARN resolution
 - `external` - Execute external commands
 
-### AWS SDK Usage
+### Google Cloud SDK Usage
 
-Uses AWS SDK for Go v2. Key clients are initialized in `New()` function based on configuration.
-
-### Key Types
-
-- `Service` - Wraps `types.Service` with additional fields (ServiceConnectConfiguration, VolumeConfigurations, VpcLatticeConfigurations)
-- `TaskDefinitionInput` - Wraps `ecs.RegisterTaskDefinitionInput`
-- `TaskDefinition` - Wraps `types.TaskDefinition`
+Uses Google Cloud Go GAPIC SDK (`cloud.google.com/go/run/apiv2`, `cloud.google.com/go/secretmanager/apiv1`, `cloud.google.com/go/artifactregistry/apiv1`, `cloud.google.com/go/logging/apiv2`). Key clients are initialized in `New()` with option injection (`AppOption`) for testability.
 
 ## Testing
 
@@ -98,14 +94,9 @@ go test -race ./...
   ```
 - Use `t.Context()` instead of `context.Background()` in tests
 
-## Documentation
-
-- When adding or changing features, always check README.md for inconsistencies and update it if needed (e.g. command examples, flag lists, log output examples)
-- When adding or modifying sections in README.md, always update the Table of Contents at the top of the file to match
-
 ## Code Style
 
 - Use `go fmt ./...` before committing
 - Error messages should be lowercase and not end with punctuation
 - Use `fmt.Errorf("failed to X: %w", err)` for error wrapping
-- Logging uses `slog` via helper methods (LogInfo, LogWarn, LogDebug)
+- Logging uses `slog` via helper methods (LogInfo, LogWarn, LogDebug, LogError)

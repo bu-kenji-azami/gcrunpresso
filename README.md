@@ -317,7 +317,7 @@ gcrunpresso delete --force
 
 - `{{ env "KEY" "default_value" }}`: Read environment variable with fallback.
 - `{{ must_env "KEY" }}`: Require environment variable (aborts if unset).
-- `{{ secret "secret-name" }}`: Read secret payload from GCP Secret Manager.
+- `{{ secretmanager_ref "secret-name" }}`: Returns Secret Manager resource path (`projects/PROJECT/secrets/secret-name`) for use with `valueSource.secretKeyRef`.
 - `{{ tfstate "module.vpc.network_name" }}`: Lookup value from Terraform state.
 - `{{ tfstate_output "service_url" }}`: Lookup output from Terraform state.
 
@@ -327,7 +327,7 @@ You can use `.jsonnet` files for `gcrunpresso.jsonnet`, `service.jsonnet`, or `j
 
 ```jsonnet
 local env = std.native("env");
-local secret = std.native("secret");
+local secretmanager_ref = std.native("secretmanager_ref");
 
 {
   template: {
@@ -335,7 +335,15 @@ local secret = std.native("secret");
       {
         image: "asia-northeast1-docker.pkg.dev/my-proj/repo/app:" + env("TAG", "v1.0.0"),
         env: [
-          { name: "APP_SECRET", value: secret("my-app-secret") },
+          {
+            name: "APP_SECRET",
+            valueSource: {
+              secretKeyRef: {
+                secret: secretmanager_ref("my-app-secret"),
+                version: "latest",
+              },
+            },
+          },
         ],
       },
     ],
@@ -359,12 +367,14 @@ plugins:
 ```
 
 ### `secretmanager` Plugin
-Fetch secrets directly from Google Cloud Secret Manager at evaluation time.
+Resolves Google Cloud Secret Manager resource references (`projects/PROJECT/secrets/NAME`) without accessing secret payloads. The Cloud Run runtime Service Account requires the `roles/secretmanager.secretAccessor` IAM role.
+
+> [!NOTE]
+> For security, `gcrunpresso` never resolves secret payloads in plaintext. If secrets were previously deployed in plaintext using the legacy `secret` function, rotate them immediately in Secret Manager and update your definitions to use `valueSource.secretKeyRef`.
 
 ```yaml
 plugins:
   - name: secretmanager
-    # func_prefix: secret
 ```
 
 ### `external` Plugin

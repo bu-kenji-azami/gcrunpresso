@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/run/apiv2/runpb"
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-jsonnet"
 	"github.com/google/go-jsonnet/ast"
-	"github.com/goccy/go-yaml"
 	"github.com/kayac/go-config"
 )
 
@@ -159,9 +159,28 @@ func (l *configLoader) Load(ctx context.Context, path string, c *Config) error {
 }
 
 func (c *Config) Restrict(opt *Option) error {
-	if opt.Project != "" {
-		c.Project = opt.Project
+	if opt != nil {
+		if opt.Project != "" {
+			c.Project = opt.Project
+		}
+		if opt.Location != "" {
+			c.Location = opt.Location
+		}
+		if opt.Service != "" {
+			c.Service = opt.Service
+		}
+		if opt.Job != "" {
+			c.Job = opt.Job
+		}
+		if opt.ImpersonateServiceAccount != "" {
+			c.ImpersonateServiceAccount = opt.ImpersonateServiceAccount
+		}
+		if opt.Timeout > 0 {
+			c.Timeout = Duration{Duration: opt.Timeout}
+		}
 	}
+
+	// Environment variable fallbacks (3rd tier, lowest priority)
 	if c.Project == "" {
 		c.Project = os.Getenv("GOOGLE_CLOUD_PROJECT")
 		if c.Project == "" {
@@ -169,24 +188,28 @@ func (c *Config) Restrict(opt *Option) error {
 		}
 	}
 
-	if opt.Location != "" {
-		c.Location = opt.Location
-	}
 	if c.Location == "" {
 		c.Location = os.Getenv("CLOUDSDK_COMPUTE_REGION")
 	}
 
-	if opt.Service != "" {
-		c.Service = opt.Service
+	if c.Service == "" {
+		c.Service = os.Getenv("GCRUNPRESSO_SERVICE")
 	}
-	if opt.Job != "" {
-		c.Job = opt.Job
+
+	if c.Job == "" {
+		c.Job = os.Getenv("GCRUNPRESSO_JOB")
 	}
-	if opt.ImpersonateServiceAccount != "" {
-		c.ImpersonateServiceAccount = opt.ImpersonateServiceAccount
+
+	if c.ImpersonateServiceAccount == "" {
+		c.ImpersonateServiceAccount = os.Getenv("GCRUNPRESSO_IMPERSONATE_SERVICE_ACCOUNT")
 	}
-	if opt.Timeout > 0 {
-		c.Timeout = Duration{Duration: opt.Timeout}
+
+	if c.Timeout.Duration == 0 {
+		if tStr := os.Getenv("GCRUNPRESSO_TIMEOUT"); tStr != "" {
+			if d, err := time.ParseDuration(tStr); err == nil {
+				c.Timeout = Duration{Duration: d}
+			}
+		}
 	}
 
 	if c.Project == "" {

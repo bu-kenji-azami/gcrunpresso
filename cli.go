@@ -2,6 +2,7 @@ package gcrunpresso
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -21,12 +22,12 @@ type CLIOptions struct {
 	ExtStr                    map[string]string `help:"external string values for Jsonnet" env:"GCRUNPRESSO_EXT_STR"`
 	ExtCode                   map[string]string `help:"external code values for Jsonnet" env:"GCRUNPRESSO_EXT_CODE"`
 	ConfigFilePath            string            `name:"config" help:"config file" default:"gcrunpresso.yml" env:"GCRUNPRESSO_CONFIG"`
-	Project                   string            `help:"GCP Project ID" env:"GOOGLE_CLOUD_PROJECT"`
-	Location                  string            `help:"GCP Location/Region" env:"CLOUDSDK_COMPUTE_REGION"`
-	Service                   string            `help:"Cloud Run Service name" env:"GCRUNPRESSO_SERVICE"`
-	Job                       string            `help:"Cloud Run Job name" env:"GCRUNPRESSO_JOB"`
-	ImpersonateServiceAccount string            `help:"Service Account email to impersonate" env:"GCRUNPRESSO_IMPERSONATE_SERVICE_ACCOUNT"`
-	Timeout                   *time.Duration    `help:"timeout duration" env:"GCRUNPRESSO_TIMEOUT"`
+	Project                   string            `help:"GCP Project ID"`
+	Location                  string            `help:"GCP Location/Region"`
+	Service                   string            `help:"Cloud Run Service name"`
+	Job                       string            `help:"Cloud Run Job name"`
+	ImpersonateServiceAccount string            `help:"Service Account email to impersonate"`
+	Timeout                   *time.Duration    `help:"timeout duration"`
 	Color                     bool              `help:"enable colorized output" env:"GCRUNPRESSO_COLOR" default:"true" negatable:""`
 	LogFormat                 string            `help:"log format" env:"GCRUNPRESSO_LOG_FORMAT" default:"text" enum:"text,json"`
 
@@ -149,6 +150,10 @@ func CLI(ctx context.Context, parse CLIParseFunc) (int, error) {
 	}
 
 	if err := dispatchCLI(ctx, sub, usage, opts); err != nil {
+		var exitCoder interface{ ExitCode() int }
+		if errors.As(err, &exitCoder) {
+			return exitCoder.ExitCode(), err
+		}
 		return 1, err
 	}
 	return 0, nil

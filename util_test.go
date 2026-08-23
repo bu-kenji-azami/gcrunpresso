@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kayac/gcrunpresso/v2"
 )
@@ -108,4 +109,59 @@ func TestSleepContext(t *testing.T) {
 			t.Errorf("Sleep returned too quickly, expected at least some delay: %v", elapsed)
 		}
 	})
+}
+
+func TestFindServingRevisions(t *testing.T) {
+	svc := &runpb.Service{
+		LatestReadyRevision: "rev-fallback",
+		TrafficStatuses: []*runpb.TrafficTargetStatus{
+			{
+				Revision: "rev-v1",
+				Percent:  30,
+			},
+			{
+				Revision: "rev-v2",
+				Percent:  70,
+			},
+			{
+				Revision: "rev-zero",
+				Percent:  0,
+			},
+		},
+	}
+
+	revs := gcrunpresso.FindServingRevisions(svc)
+	if len(revs) != 2 || revs[0] != "rev-v1" || revs[1] != "rev-v2" {
+		t.Errorf("expected [rev-v1 rev-v2], got %v", revs)
+	}
+
+	// Fallback to LatestReadyRevision when TrafficStatuses is empty
+	emptySvc := &runpb.Service{
+		LatestReadyRevision: "rev-fallback",
+	}
+	fallbackRevs := gcrunpresso.FindServingRevisions(emptySvc)
+	if len(fallbackRevs) != 1 || fallbackRevs[0] != "rev-fallback" {
+		t.Errorf("expected [rev-fallback], got %v", fallbackRevs)
+	}
+}
+
+func TestFindPrimaryServingRevision(t *testing.T) {
+	svc := &runpb.Service{
+		LatestReadyRevision: "rev-v1",
+		TrafficStatuses: []*runpb.TrafficTargetStatus{
+			{
+				Revision: "rev-v1",
+				Percent:  30,
+			},
+			{
+				Revision: "rev-v2",
+				Percent:  70,
+			},
+		},
+	}
+
+	primary := gcrunpresso.FindPrimaryServingRevision(svc)
+	if primary != "rev-v2" {
+		t.Errorf("expected primary rev-v2, got %s", primary)
+	}
 }

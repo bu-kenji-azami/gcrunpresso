@@ -7,8 +7,57 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/samber/lo"
 )
+
+// FindServingRevisions extracts all revisions currently receiving traffic (Percent > 0)
+// from rawSvc.TrafficStatuses. If TrafficStatuses is empty, falls back to rawSvc.LatestReadyRevision.
+func FindServingRevisions(rawSvc *runpb.Service) []string {
+	if rawSvc == nil {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	var revs []string
+
+	for _, ts := range rawSvc.TrafficStatuses {
+		if ts != nil && ts.Percent > 0 && ts.Revision != "" {
+			if _, ok := seen[ts.Revision]; !ok {
+				seen[ts.Revision] = struct{}{}
+				revs = append(revs, ts.Revision)
+			}
+		}
+	}
+
+	if len(revs) == 0 && rawSvc.LatestReadyRevision != "" {
+		revs = append(revs, rawSvc.LatestReadyRevision)
+	}
+
+	return revs
+}
+
+// FindPrimaryServingRevision returns the revision receiving the highest percentage of traffic,
+// or LatestReadyRevision if unavailable.
+func FindPrimaryServingRevision(rawSvc *runpb.Service) string {
+	if rawSvc == nil {
+		return ""
+	}
+	var maxPercent int32
+	var primaryRev string
+
+	for _, ts := range rawSvc.TrafficStatuses {
+		if ts != nil && ts.Percent > maxPercent && ts.Revision != "" {
+			maxPercent = ts.Percent
+			primaryRev = ts.Revision
+		}
+	}
+
+	if primaryRev != "" {
+		return primaryRev
+	}
+	return rawSvc.LatestReadyRevision
+}
 
 func parseLabels(s string) (map[string]string, error) {
 	labels := make(map[string]string)

@@ -9,6 +9,7 @@ builds:
     binary: gcrunpresso
     tags:
       - no_azurerm
+      - no_s3
     ldflags:
       - -s -w
       - -X github.com/kayac/gcrunpresso/v2.Version=v{{.Version}}

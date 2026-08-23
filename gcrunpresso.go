@@ -3,17 +3,144 @@ package gcrunpresso
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
 	artifactregistry "cloud.google.com/go/artifactregistry/apiv1"
+	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	logging "cloud.google.com/go/logging/apiv2"
 	"cloud.google.com/go/logging/logadmin"
 	run "cloud.google.com/go/run/apiv2"
+	"cloud.google.com/go/run/apiv2/runpb"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/googleapis/gax-go/v2"
 	"google.golang.org/api/impersonate"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
+
+type ServicesAPI interface {
+	GetService(ctx context.Context, req *runpb.GetServiceRequest, opts ...gax.CallOption) (*runpb.Service, error)
+	CreateService(ctx context.Context, req *runpb.CreateServiceRequest, opts ...gax.CallOption) (*run.CreateServiceOperation, error)
+	UpdateService(ctx context.Context, req *runpb.UpdateServiceRequest, opts ...gax.CallOption) (*run.UpdateServiceOperation, error)
+	DeleteService(ctx context.Context, req *runpb.DeleteServiceRequest, opts ...gax.CallOption) (*run.DeleteServiceOperation, error)
+}
+
+type JobsAPI interface {
+	GetJob(ctx context.Context, req *runpb.GetJobRequest, opts ...gax.CallOption) (*runpb.Job, error)
+	CreateJob(ctx context.Context, req *runpb.CreateJobRequest, opts ...gax.CallOption) (*run.CreateJobOperation, error)
+	UpdateJob(ctx context.Context, req *runpb.UpdateJobRequest, opts ...gax.CallOption) (*run.UpdateJobOperation, error)
+	DeleteJob(ctx context.Context, req *runpb.DeleteJobRequest, opts ...gax.CallOption) (*run.DeleteJobOperation, error)
+	RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (*run.RunJobOperation, error)
+}
+
+type TasksAPI interface {
+	ListTasks(ctx context.Context, req *runpb.ListTasksRequest) ([]*runpb.Task, error)
+}
+
+type RevisionsAPI interface {
+	GetRevision(ctx context.Context, req *runpb.GetRevisionRequest, opts ...gax.CallOption) (*runpb.Revision, error)
+	ListRevisions(ctx context.Context, req *runpb.ListRevisionsRequest) ([]*runpb.Revision, error)
+}
+
+type ExecutionsAPI interface {
+	GetExecution(ctx context.Context, req *runpb.GetExecutionRequest, opts ...gax.CallOption) (*runpb.Execution, error)
+	ListExecutions(ctx context.Context, req *runpb.ListExecutionsRequest) ([]*runpb.Execution, error)
+}
+
+type SecretManagerAPI interface {
+	GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error)
+}
+
+type ArtifactRegistryAPI interface {
+	GetRepository(ctx context.Context, req *artifactregistrypb.GetRepositoryRequest, opts ...gax.CallOption) (*artifactregistrypb.Repository, error)
+	GetDockerImage(ctx context.Context, req *artifactregistrypb.GetDockerImageRequest, opts ...gax.CallOption) (*artifactregistrypb.DockerImage, error)
+}
+
+type tasksClientAdapter struct {
+	client *run.TasksClient
+}
+
+func (a *tasksClientAdapter) ListTasks(ctx context.Context, req *runpb.ListTasksRequest) ([]*runpb.Task, error) {
+	if a == nil || a.client == nil {
+		return nil, nil
+	}
+	it := a.client.ListTasks(ctx, req)
+	var tasks []*runpb.Task
+	for {
+		task, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
+type revisionsClientAdapter struct {
+	client *run.RevisionsClient
+}
+
+func (a *revisionsClientAdapter) GetRevision(ctx context.Context, req *runpb.GetRevisionRequest, opts ...gax.CallOption) (*runpb.Revision, error) {
+	if a == nil || a.client == nil {
+		return nil, fmt.Errorf("revisions client is not initialized")
+	}
+	return a.client.GetRevision(ctx, req, opts...)
+}
+
+func (a *revisionsClientAdapter) ListRevisions(ctx context.Context, req *runpb.ListRevisionsRequest) ([]*runpb.Revision, error) {
+	if a == nil || a.client == nil {
+		return nil, nil
+	}
+	it := a.client.ListRevisions(ctx, req)
+	var revs []*runpb.Revision
+	for {
+		rev, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		revs = append(revs, rev)
+	}
+	return revs, nil
+}
+
+type executionsClientAdapter struct {
+	client *run.ExecutionsClient
+}
+
+func (a *executionsClientAdapter) GetExecution(ctx context.Context, req *runpb.GetExecutionRequest, opts ...gax.CallOption) (*runpb.Execution, error) {
+	if a == nil || a.client == nil {
+		return nil, fmt.Errorf("executions client is not initialized")
+	}
+	return a.client.GetExecution(ctx, req, opts...)
+}
+
+func (a *executionsClientAdapter) ListExecutions(ctx context.Context, req *runpb.ListExecutionsRequest) ([]*runpb.Execution, error) {
+	if a == nil || a.client == nil {
+		return nil, nil
+	}
+	it := a.client.ListExecutions(ctx, req)
+	var execs []*runpb.Execution
+	for {
+		exec, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		execs = append(execs, exec)
+	}
+	return execs, nil
+}
 
 type App struct {
 	config  *Config
@@ -21,15 +148,17 @@ type App struct {
 	logger  *slog.Logger
 	timeout time.Duration
 
-	servicesClient   *run.ServicesClient
-	jobsClient       *run.JobsClient
-	revisionsClient  *run.RevisionsClient
-	executionsClient *run.ExecutionsClient
-	tasksClient      *run.TasksClient
+	servicesClient   ServicesAPI
+	jobsClient       JobsAPI
+	revisionsClient  RevisionsAPI
+	executionsClient ExecutionsAPI
+	tasksClient      TasksAPI
 	logTailClient    *logging.Client
 	logAdminClient   *logadmin.Client
-	secretClient     *secretmanager.Client
-	arClient         *artifactregistry.Client
+	secretClient     SecretManagerAPI
+	arClient         ArtifactRegistryAPI
+
+	closers []io.Closer
 }
 
 type Option struct {
@@ -45,10 +174,38 @@ type Option struct {
 
 type AppOption func(*App)
 
+func WithServicesClient(c ServicesAPI) AppOption {
+	return func(a *App) { a.servicesClient = c }
+}
+
+func WithJobsClient(c JobsAPI) AppOption {
+	return func(a *App) { a.jobsClient = c }
+}
+
+func WithTasksClient(c TasksAPI) AppOption {
+	return func(a *App) { a.tasksClient = c }
+}
+
+func WithRevisionsClient(c RevisionsAPI) AppOption {
+	return func(a *App) { a.revisionsClient = c }
+}
+
+func WithExecutionsClient(c ExecutionsAPI) AppOption {
+	return func(a *App) { a.executionsClient = c }
+}
+
+func WithSecretManagerClient(c SecretManagerAPI) AppOption {
+	return func(a *App) { a.secretClient = c }
+}
+
+func WithArtifactRegistryClient(c ArtifactRegistryAPI) AppOption {
+	return func(a *App) { a.arClient = c }
+}
+
 func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 	conf := NewDefaultConfig()
+	loader := newConfigLoader()
 	if opt.ConfigFilePath != "" {
-		loader := newConfigLoader()
 		if err := loader.Load(ctx, opt.ConfigFilePath, conf); err != nil {
 			return nil, fmt.Errorf("failed to load config: %w", err)
 		}
@@ -59,7 +216,7 @@ func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 
 	app := &App{
 		config:  conf,
-		loader:  newConfigLoader(),
+		loader:  loader, // Retain loaded loader with plugin funcs (Finding #5)
 		logger:  commonLogger.With("project", conf.Project, "location", conf.Location),
 		timeout: conf.Timeout.Duration,
 	}
@@ -80,60 +237,78 @@ func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 		clientOpts = append(clientOpts, option.WithTokenSource(ts))
 	}
 
-	// Initialize GCP Clients
-	servicesClient, err := run.NewServicesClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create run services client: %w", err)
+	// Initialize GAPIC clients if not injected
+	if app.servicesClient == nil {
+		c, err := run.NewServicesClient(ctx, clientOpts...)
+		if err == nil {
+			app.servicesClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.servicesClient = servicesClient
 
-	jobsClient, err := run.NewJobsClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create run jobs client: %w", err)
+	if app.jobsClient == nil {
+		c, err := run.NewJobsClient(ctx, clientOpts...)
+		if err == nil {
+			app.jobsClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.jobsClient = jobsClient
 
-	revisionsClient, err := run.NewRevisionsClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create run revisions client: %w", err)
+	if app.revisionsClient == nil {
+		c, err := run.NewRevisionsClient(ctx, clientOpts...)
+		if err == nil {
+			app.revisionsClient = &revisionsClientAdapter{client: c}
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.revisionsClient = revisionsClient
 
-	executionsClient, err := run.NewExecutionsClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create run executions client: %w", err)
+	if app.executionsClient == nil {
+		c, err := run.NewExecutionsClient(ctx, clientOpts...)
+		if err == nil {
+			app.executionsClient = &executionsClientAdapter{client: c}
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.executionsClient = executionsClient
 
-	tasksClient, err := run.NewTasksClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create run tasks client: %w", err)
+	if app.tasksClient == nil {
+		c, err := run.NewTasksClient(ctx, clientOpts...)
+		if err == nil {
+			app.tasksClient = &tasksClientAdapter{client: c}
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.tasksClient = tasksClient
 
-	logTailClient, err := logging.NewClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create logging tail client: %w", err)
+	if app.logTailClient == nil {
+		c, err := logging.NewClient(ctx, clientOpts...)
+		if err == nil {
+			app.logTailClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.logTailClient = logTailClient
 
-	logAdminClient, err := logadmin.NewClient(ctx, conf.Project, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create logging admin client: %w", err)
+	if app.logAdminClient == nil {
+		c, err := logadmin.NewClient(ctx, conf.Project, clientOpts...)
+		if err == nil {
+			app.logAdminClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.logAdminClient = logAdminClient
 
-	secretClient, err := secretmanager.NewClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create secret manager client: %w", err)
+	if app.secretClient == nil {
+		c, err := secretmanager.NewClient(ctx, clientOpts...)
+		if err == nil {
+			app.secretClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.secretClient = secretClient
 
-	arClient, err := artifactregistry.NewClient(ctx, clientOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create artifact registry client: %w", err)
+	if app.arClient == nil {
+		c, err := artifactregistry.NewClient(ctx, clientOpts...)
+		if err == nil {
+			app.arClient = c
+			app.closers = append(app.closers, c)
+		}
 	}
-	app.arClient = arClient
 
 	return app, nil
 }
@@ -149,23 +324,23 @@ func (d *App) Timeout() time.Duration {
 	return defaultTimeout
 }
 
-func (d *App) ServicesClient() *run.ServicesClient {
+func (d *App) ServicesClient() ServicesAPI {
 	return d.servicesClient
 }
 
-func (d *App) JobsClient() *run.JobsClient {
+func (d *App) JobsClient() JobsAPI {
 	return d.jobsClient
 }
 
-func (d *App) RevisionsClient() *run.RevisionsClient {
+func (d *App) RevisionsClient() RevisionsAPI {
 	return d.revisionsClient
 }
 
-func (d *App) ExecutionsClient() *run.ExecutionsClient {
+func (d *App) ExecutionsClient() ExecutionsAPI {
 	return d.executionsClient
 }
 
-func (d *App) TasksClient() *run.TasksClient {
+func (d *App) TasksClient() TasksAPI {
 	return d.tasksClient
 }
 
@@ -177,11 +352,11 @@ func (d *App) LogAdminClient() *logadmin.Client {
 	return d.logAdminClient
 }
 
-func (d *App) SecretManagerClient() *secretmanager.Client {
+func (d *App) SecretManagerClient() SecretManagerAPI {
 	return d.secretClient
 }
 
-func (d *App) ArtifactRegistryClient() *artifactregistry.Client {
+func (d *App) ArtifactRegistryClient() ArtifactRegistryAPI {
 	return d.arClient
 }
 
@@ -207,49 +382,11 @@ func (d *App) ResourceExecutionPath(execution string) string {
 
 func (d *App) Close() error {
 	var errs []error
-	if d.servicesClient != nil {
-		if err := d.servicesClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.jobsClient != nil {
-		if err := d.jobsClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.revisionsClient != nil {
-		if err := d.revisionsClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.executionsClient != nil {
-		if err := d.executionsClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.tasksClient != nil {
-		if err := d.tasksClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.logTailClient != nil {
-		if err := d.logTailClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.logAdminClient != nil {
-		if err := d.logAdminClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.secretClient != nil {
-		if err := d.secretClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if d.arClient != nil {
-		if err := d.arClient.Close(); err != nil {
-			errs = append(errs, err)
+	for _, c := range d.closers {
+		if c != nil {
+			if err := c.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	if len(errs) > 0 {

@@ -77,6 +77,20 @@ func (d *App) deployService(ctx context.Context, opt DeployOption) error {
 		svc.Traffic = trafficTargets
 	}
 
+	// Warn if default 100% traffic allocation overwrites non-default traffic table (#8)
+	if !opt.NoTraffic && opt.Traffic == "" && remoteSvc != nil && len(remoteSvc.Traffic) > 0 {
+		hasNonDefaultTraffic := false
+		for _, t := range remoteSvc.Traffic {
+			if t != nil && (t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION || t.Percent < 100 || t.Tag != "") {
+				hasNonDefaultTraffic = true
+				break
+			}
+		}
+		if hasNonDefaultTraffic {
+			d.LogWarn("re-asserting 100% traffic to latest revision, overwriting existing non-default traffic table", "service", d.config.Service)
+		}
+	}
+
 	if opt.DryRun {
 		d.LogInfo("DRY RUN: planned service configuration", "service", svc.Name)
 		jsonBytes, err := MarshalService(svc)
@@ -97,7 +111,9 @@ func (d *App) deployService(ctx context.Context, opt DeployOption) error {
 		if err != nil {
 			return fmt.Errorf("failed to create service %s: %w", d.config.Service, err)
 		}
-		d.LogInfo("service create operation started, waiting for completion", "op", op.Name())
+		if op != nil {
+			d.LogInfo("service create operation started, waiting for completion", "op", op.Name())
+		}
 	} else {
 		d.LogInfo("updating service", "service", d.config.Service)
 		mask := &fieldmaskpb.FieldMask{
@@ -110,29 +126,32 @@ func (d *App) deployService(ctx context.Context, opt DeployOption) error {
 		if err != nil {
 			return fmt.Errorf("failed to update service %s: %w", d.config.Service, err)
 		}
-		d.LogInfo("service update operation started, waiting for completion", "op", op.Name())
+		if op != nil {
+			d.LogInfo("service update operation started, waiting for completion", "op", op.Name())
+		}
 	}
 
 	// Wait for Service Ready condition (R5, KTD6)
 	readySvc, err := d.WaitForServiceReady(ctx, d.ResourceServicePath())
 	if err != nil {
 		d.LogError("service deployment failed to become ready: %v", err)
-		// On failure/timeout, attempt to restore traffic if remote had a ready revision
-		if !isCreate && remoteSvc != nil && remoteSvc.LatestReadyRevision != "" {
-			d.LogWarn("attempting to re-pin traffic to previously serving revision", "revision", remoteSvc.LatestReadyRevision)
-			_, _ = d.servicesClient.UpdateService(context.Background(), &runpb.UpdateServiceRequest{
+		// On failure/timeout, restore previous traffic allocation (#7, #20, #28)
+		if !isCreate && remoteSvc != nil && len(remoteSvc.Traffic) > 0 {
+			d.LogWarn("deployment failed; abandoning revision and restoring prior traffic allocation", "abandoned_revision", revName)
+			recovCtx, cancelRecov := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancelRecov()
+			_, updateErr := d.servicesClient.UpdateService(recovCtx, &runpb.UpdateServiceRequest{
 				Service: &runpb.Service{
-					Name: d.ResourceServicePath(),
-					Traffic: []*runpb.TrafficTarget{
-						{
-							Type:     runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION,
-							Revision: remoteSvc.LatestReadyRevision,
-							Percent:  100,
-						},
-					},
+					Name:    d.ResourceServicePath(),
+					Traffic: remoteSvc.Traffic,
 				},
 				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"traffic"}},
 			})
+			if updateErr != nil {
+				d.LogError("failed to restore prior traffic allocation during recovery: %v", updateErr)
+			} else {
+				d.LogInfo("successfully restored prior traffic allocation", "service", d.config.Service)
+			}
 		}
 		return err
 	}
@@ -159,7 +178,12 @@ func (d *App) deployJob(ctx context.Context, opt DeployOption) error {
 			return fmt.Errorf("failed to get job %s: %w", d.ResourceJobPath(), err)
 		}
 	}
-	_ = remoteJob
+	// Validate safety guards on update (R6, P0 #3)
+	if !isCreate && remoteJob != nil {
+		if err := validateJobSafetyGuards(remoteJob, job); err != nil {
+			return err
+		}
+	}
 
 	if opt.DryRun {
 		d.LogInfo("DRY RUN: planned job configuration", "job", job.Name)
@@ -181,7 +205,9 @@ func (d *App) deployJob(ctx context.Context, opt DeployOption) error {
 		if err != nil {
 			return fmt.Errorf("failed to create job %s: %w", d.config.Job, err)
 		}
-		d.LogInfo("job create operation started, waiting for completion", "op", op.Name())
+		if op != nil {
+			d.LogInfo("job create operation started, waiting for completion", "op", op.Name())
+		}
 	} else {
 		d.LogInfo("updating job", "job", d.config.Job)
 		op, err := d.jobsClient.UpdateJob(ctx, &runpb.UpdateJobRequest{
@@ -190,7 +216,9 @@ func (d *App) deployJob(ctx context.Context, opt DeployOption) error {
 		if err != nil {
 			return fmt.Errorf("failed to update job %s: %w", d.config.Job, err)
 		}
-		d.LogInfo("job update operation started, waiting for completion", "op", op.Name())
+		if op != nil {
+			d.LogInfo("job update operation started, waiting for completion", "op", op.Name())
+		}
 	}
 
 	readyJob, err := d.WaitForJobReady(ctx, d.ResourceJobPath())
@@ -198,6 +226,85 @@ func (d *App) deployJob(ctx context.Context, opt DeployOption) error {
 		return err
 	}
 	d.LogInfo("job deployed successfully", "job", readyJob.Name)
+	return nil
+}
+
+func validateJobSafetyGuards(remote, local *runpb.Job) error {
+	if remote == nil || local == nil {
+		return nil
+	}
+
+	// 1. BinaryAuthorization
+	if remote.BinaryAuthorization != nil && local.BinaryAuthorization == nil {
+		return fmt.Errorf("safety guard violation: remote Job has binary_authorization configured, but rendered manifest omits 'binary_authorization'. Please declare binary_authorization in job.yaml to prevent security policy reset")
+	}
+
+	// 2. Labels
+	if len(remote.Labels) > 0 && len(local.Labels) == 0 {
+		return fmt.Errorf("safety guard violation: remote Job has labels configured, but rendered manifest omits 'labels'. Please declare labels in job.yaml to prevent metadata reset")
+	}
+
+	// 3. Annotations
+	if len(remote.Annotations) > 0 && len(local.Annotations) == 0 {
+		return fmt.Errorf("safety guard violation: remote Job has annotations configured, but rendered manifest omits 'annotations'. Please declare annotations in job.yaml to prevent metadata reset")
+	}
+
+	if remote.Template != nil {
+		locExec := local.Template
+		if locExec == nil {
+			locExec = &runpb.ExecutionTemplate{}
+		}
+
+		// 4. TaskCount
+		if remote.Template.TaskCount > 0 && locExec.TaskCount == 0 {
+			return fmt.Errorf("safety guard violation: remote Job has task_count=%d configured, but rendered manifest omits 'template.task_count'", remote.Template.TaskCount)
+		}
+
+		// 5. Parallelism
+		if remote.Template.Parallelism > 0 && locExec.Parallelism == 0 {
+			return fmt.Errorf("safety guard violation: remote Job has parallelism=%d configured, but rendered manifest omits 'template.parallelism'", remote.Template.Parallelism)
+		}
+
+		if remote.Template.Template != nil {
+			remTask := remote.Template.Template
+			locTask := locExec.Template
+			if locTask == nil {
+				locTask = &runpb.TaskTemplate{}
+			}
+
+			// 6. ServiceAccount
+			if remTask.ServiceAccount != "" && locTask.ServiceAccount == "" {
+				return fmt.Errorf("safety guard violation: remote Job has service_account=%s configured, but rendered manifest omits 'template.template.service_account'. Please declare service_account in job.yaml to prevent fallback to default compute SA", remTask.ServiceAccount)
+			}
+
+			// 7. VpcAccess
+			if remTask.VpcAccess != nil && locTask.VpcAccess == nil {
+				return fmt.Errorf("safety guard violation: remote Job has VPC access configured, but rendered manifest omits 'template.template.vpc_access'. Please declare vpc_access in job.yaml to prevent egress reset")
+			}
+
+			// 8. EncryptionKey
+			if remTask.EncryptionKey != "" && locTask.EncryptionKey == "" {
+				return fmt.Errorf("safety guard violation: remote Job has encryption_key (CMEK) configured, but rendered manifest omits 'template.template.encryption_key'. Please declare encryption_key in job.yaml to prevent downgrade to Google-managed key")
+			}
+
+			// 9. Retries (oneof TaskTemplate_MaxRetries)
+			if remTask.Retries != nil && locTask.Retries == nil {
+				return fmt.Errorf("safety guard violation: remote Job has max_retries configured, but rendered manifest omits 'template.template.max_retries'")
+			}
+
+			// 10. Timeout
+			if remTask.Timeout != nil && locTask.Timeout == nil {
+				return fmt.Errorf("safety guard violation: remote Job has timeout configured, but rendered manifest omits 'template.template.timeout'")
+			}
+
+			// 11. ExecutionEnvironment
+			if remTask.ExecutionEnvironment != runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_UNSPECIFIED &&
+				locTask.ExecutionEnvironment == runpb.ExecutionEnvironment_EXECUTION_ENVIRONMENT_UNSPECIFIED {
+				return fmt.Errorf("safety guard violation: remote Job has execution_environment=%s configured, but rendered manifest omits 'template.template.execution_environment'", remTask.ExecutionEnvironment)
+			}
+		}
+	}
+
 	return nil
 }
 

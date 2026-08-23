@@ -161,3 +161,54 @@ job_definition: job.jsonnet
 		t.Errorf("unexpected max retries: %d", job.Template.Template.GetMaxRetries())
 	}
 }
+
+func TestConfigPrecedenceAllSixFlags(t *testing.T) {
+	// ENV level
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "env-project")
+	t.Setenv("CLOUDSDK_COMPUTE_REGION", "env-location")
+	t.Setenv("GCRUNPRESSO_SERVICE", "env-service")
+	t.Setenv("GCRUNPRESSO_JOB", "env-job")
+	t.Setenv("GCRUNPRESSO_IMPERSONATE_SERVICE_ACCOUNT", "env-sa@proj.iam.gserviceaccount.com")
+	t.Setenv("GCRUNPRESSO_TIMEOUT", "3m")
+
+	conf := gcrunpresso.NewDefaultConfig()
+	// YAML level
+	conf.Project = "yaml-project"
+	conf.Location = "yaml-location"
+	conf.Service = "yaml-service"
+	conf.Job = "yaml-job"
+	conf.ImpersonateServiceAccount = "yaml-sa@proj.iam.gserviceaccount.com"
+	conf.Timeout = gcrunpresso.Duration{Duration: 5 * time.Minute}
+
+	// CLI level overrides project and timeout
+	opt := &gcrunpresso.Option{
+		Project: "cli-project",
+		Timeout: 1 * time.Minute,
+	}
+
+	if err := conf.Restrict(opt); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// CLI should beat YAML and ENV
+	if conf.Project != "cli-project" {
+		t.Errorf("expected Project cli-project, got %s", conf.Project)
+	}
+	if conf.Timeout.Duration != 1*time.Minute {
+		t.Errorf("expected Timeout 1m, got %v", conf.Timeout.Duration)
+	}
+
+	// YAML should beat ENV for fields omitted in CLI
+	if conf.Location != "yaml-location" {
+		t.Errorf("expected Location yaml-location, got %s", conf.Location)
+	}
+	if conf.Service != "yaml-service" {
+		t.Errorf("expected Service yaml-service, got %s", conf.Service)
+	}
+	if conf.Job != "yaml-job" {
+		t.Errorf("expected Job yaml-job, got %s", conf.Job)
+	}
+	if conf.ImpersonateServiceAccount != "yaml-sa@proj.iam.gserviceaccount.com" {
+		t.Errorf("expected ImpersonateServiceAccount yaml-sa, got %s", conf.ImpersonateServiceAccount)
+	}
+}

@@ -93,3 +93,43 @@ func TestBuildTrafficTargetsInvalidSyntax(t *testing.T) {
 		t.Fatal("expected error for invalid traffic syntax, got nil")
 	}
 }
+
+func TestValidateJobSafetyGuards(t *testing.T) {
+	// Remote has TaskCount: 10, local has TaskCount: 0 -> should fail
+	remote := &runpb.Job{
+		Template: &runpb.ExecutionTemplate{
+			TaskCount: 10,
+		},
+	}
+	local := &runpb.Job{
+		Template: &runpb.ExecutionTemplate{},
+	}
+
+	err := gcrunpresso.ValidateJobSafetyGuards(remote, local)
+	if err == nil {
+		t.Fatal("expected error when remote has task_count but local omits it, got nil")
+	}
+
+	// Local has TaskCount: 5 -> should pass
+	local.Template.TaskCount = 5
+	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
+	if err != nil {
+		t.Fatalf("unexpected error when local specifies task_count: %v", err)
+	}
+
+	// Remote has ServiceAccount, local omits -> should fail
+	remote.Template.Template = &runpb.TaskTemplate{
+		ServiceAccount: "sa@proj.iam.gserviceaccount.com",
+	}
+	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
+	if err == nil {
+		t.Fatal("expected error when remote has service_account but local omits it, got nil")
+	}
+	local.Template.Template = &runpb.TaskTemplate{
+		ServiceAccount: "sa@proj.iam.gserviceaccount.com",
+	}
+	err = gcrunpresso.ValidateJobSafetyGuards(remote, local)
+	if err != nil {
+		t.Fatalf("unexpected error when local specifies service_account: %v", err)
+	}
+}

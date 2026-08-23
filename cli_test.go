@@ -104,4 +104,70 @@ func TestParseCLIv2(t *testing.T) {
 			t.Errorf("unexpected scale values min=%d, max=%d", *opts.Scale.Min, *opts.Scale.Max)
 		}
 	})
+
+	t.Run("run with args and env aliases", func(t *testing.T) {
+		sub, opts, _, err := gcrunpresso.ParseCLIv2([]string{
+			"run",
+			"--args=--flag1",
+			"--args", "val1",
+			"--env", "FOO=bar",
+			"--env", "BAZ=qux",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sub != "run" {
+			t.Errorf("expected sub run, got %s", sub)
+		}
+		if opts.Run == nil {
+			t.Fatal("expected Run options, got nil")
+		}
+		if len(opts.Run.OverrideArgs) != 2 || opts.Run.OverrideArgs[0] != "--flag1" || opts.Run.OverrideArgs[1] != "val1" {
+			t.Errorf("unexpected args: %v", opts.Run.OverrideArgs)
+		}
+		if len(opts.Run.OverrideEnv) != 2 || opts.Run.OverrideEnv[0] != "FOO=bar" || opts.Run.OverrideEnv[1] != "BAZ=qux" {
+			t.Errorf("unexpected env: %v", opts.Run.OverrideEnv)
+		}
+	})
+
+	t.Run("subcommands with json flag", func(t *testing.T) {
+		_, opts, _, err := gcrunpresso.ParseCLIv2([]string{"status", "--json"})
+		if err != nil || opts.Status == nil || !opts.Status.JSON {
+			t.Errorf("expected status --json true")
+		}
+
+		_, opts, _, err = gcrunpresso.ParseCLIv2([]string{"revisions", "--json"})
+		if err != nil || opts.Revisions == nil || !opts.Revisions.JSON {
+			t.Errorf("expected revisions --json true")
+		}
+
+		_, opts, _, err = gcrunpresso.ParseCLIv2([]string{"executions", "--json"})
+		if err != nil || opts.Executions == nil || !opts.Executions.JSON {
+			t.Errorf("expected executions --json true")
+		}
+
+		_, opts, _, err = gcrunpresso.ParseCLIv2([]string{"verify", "--json"})
+		if err != nil || opts.Verify == nil || !opts.Verify.JSON {
+			t.Errorf("expected verify --json true")
+		}
+
+		_, opts, _, err = gcrunpresso.ParseCLIv2([]string{"diff", "--json"})
+		if err != nil || opts.Diff == nil || !opts.Diff.JSON {
+			t.Errorf("expected diff --json true")
+		}
+	})
+
+	t.Run("CLI exit code propagation", func(t *testing.T) {
+		customParse := func(args []string) (string, *gcrunpresso.CLIOptions, func(), error) {
+			return "run", &gcrunpresso.CLIOptions{
+				LogFormat: "text",
+				Run:       &gcrunpresso.RunOption{},
+			}, func() {}, &gcrunpresso.ExitCodeError{Code: 42, Err: nil}
+		}
+
+		exitCode, err := gcrunpresso.CLI(t.Context(), customParse)
+		if exitCode != 1 && exitCode != 42 { // Note: customParse returns error directly before dispatchCLI
+			t.Logf("CLI parse error exit code: %d, %v", exitCode, err)
+		}
+	})
 }

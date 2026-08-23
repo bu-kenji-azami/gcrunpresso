@@ -1,8 +1,10 @@
 package gcrunpresso_test
 
 import (
+	"errors"
 	"testing"
 
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/kayac/gcrunpresso/v2"
 )
 
@@ -33,8 +35,8 @@ func TestBuildJobOverridesTasks(t *testing.T) {
 
 func TestBuildJobOverridesArgsAndEnv(t *testing.T) {
 	overrides, err := gcrunpresso.BuildJobOverrides(gcrunpresso.RunOption{
-		Args: []string{"--migrate", "--verbose"},
-		Env:  []string{"ENVIRONMENT=production", "DEBUG=true"},
+		OverrideArgs: []string{"--migrate", "--verbose"},
+		OverrideEnv:  []string{"ENVIRONMENT=production", "DEBUG=true"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -60,9 +62,41 @@ func TestBuildJobOverridesArgsAndEnv(t *testing.T) {
 
 func TestBuildJobOverridesInvalidEnv(t *testing.T) {
 	_, err := gcrunpresso.BuildJobOverrides(gcrunpresso.RunOption{
-		Env: []string{"INVALID_ENV_WITHOUT_EQUALS"},
+		OverrideEnv: []string{"INVALID_ENV_WITHOUT_EQUALS"},
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid env syntax, got nil")
+	}
+}
+
+func TestExtractMaxExitCode(t *testing.T) {
+	tasks := []*runpb.Task{
+		{
+			LastAttemptResult: &runpb.TaskAttemptResult{
+				ExitCode: 0,
+			},
+		},
+		{
+			LastAttemptResult: &runpb.TaskAttemptResult{
+				ExitCode: 42,
+			},
+		},
+		{
+			LastAttemptResult: &runpb.TaskAttemptResult{
+				ExitCode: 7,
+			},
+		},
+	}
+
+	err := gcrunpresso.ExtractMaxExitCode(tasks, nil)
+	if err == nil {
+		t.Fatal("expected non-nil error when task exit code is 42")
+	}
+	var exitCoder interface{ ExitCode() int }
+	if !errors.As(err, &exitCoder) {
+		t.Fatalf("expected ExitCodeError, got %T", err)
+	}
+	if exitCoder.ExitCode() != 42 {
+		t.Errorf("expected exit code 42, got %d", exitCoder.ExitCode())
 	}
 }

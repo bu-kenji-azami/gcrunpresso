@@ -8,13 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/fujiwara/tfstate-lookup/tfstate"
 	"github.com/google/go-jsonnet"
 	"github.com/google/go-jsonnet/ast"
 	"github.com/kayac/gcrunpresso/v2/external"
-	"google.golang.org/api/option"
 )
 
 type ConfigPlugin struct {
@@ -133,35 +130,29 @@ func setupPluginTFState(ctx context.Context, p ConfigPlugin, c *Config, l *confi
 }
 
 func setupPluginSecretManager(ctx context.Context, p ConfigPlugin, c *Config, l *configLoader) error {
-	client, err := secretmanager.NewClient(ctx, option.WithoutAuthentication())
-	if err != nil {
-		return fmt.Errorf("failed to create secretmanager client: %w", err)
+	refFunc := func(name string) (string, error) {
+		if name == "" {
+			return "", fmt.Errorf("secret name cannot be empty")
+		}
+		if strings.HasPrefix(name, "projects/") {
+			return name, nil
+		}
+		return fmt.Sprintf("projects/%s/secrets/%s", c.Project, name), nil
+	}
+
+	deprecatedSecretFunc := func(name string) (string, error) {
+		return "", fmt.Errorf("secret template function has been removed for security reasons. Use secretmanager_ref with Cloud Run native valueSource.secretKeyRef instead. If secrets were previously exposed in plaintext, rotate them immediately.")
 	}
 
 	prefix := p.FuncPrefix
 	if prefix == "" {
-		prefix = "secret"
-	}
-
-	fetchSecret := func(name string) (string, error) {
-		secretPath := name
-		if !strings.HasPrefix(secretPath, "projects/") {
-			secretPath = fmt.Sprintf("projects/%s/secrets/%s/versions/latest", c.Project, name)
-		} else if !strings.Contains(secretPath, "/versions/") {
-			secretPath = fmt.Sprintf("%s/versions/latest", secretPath)
-		}
-
-		resp, err := client.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-			Name: secretPath,
-		})
-		if err != nil {
-			return "", fmt.Errorf("failed to access secret %s: %w", secretPath, err)
-		}
-		return string(resp.Payload.Data), nil
+		prefix = "secretmanager_ref"
 	}
 
 	if l.FuncMap != nil {
-		l.FuncMap[prefix] = fetchSecret
+		l.FuncMap[prefix] = refFunc
+		l.FuncMap["secretmanager_ref"] = refFunc
+		l.FuncMap["secret"] = deprecatedSecretFunc
 		l.Loader.Funcs(l.FuncMap)
 	}
 
@@ -172,9 +163,33 @@ func setupPluginSecretManager(ctx context.Context, p ConfigPlugin, c *Config, l 
 			Func: func(args []any) (any, error) {
 				name, ok := args[0].(string)
 				if !ok {
+					return nil, fmt.Errorf("secretmanager_ref: name must be string")
+				}
+				return refFunc(name)
+			},
+		})
+		if prefix != "secretmanager_ref" {
+			l.VM.NativeFunction(&jsonnet.NativeFunction{
+				Name:   "secretmanager_ref",
+				Params: []ast.Identifier{"name"},
+				Func: func(args []any) (any, error) {
+					name, ok := args[0].(string)
+					if !ok {
+						return nil, fmt.Errorf("secretmanager_ref: name must be string")
+					}
+					return refFunc(name)
+				},
+			})
+		}
+		l.VM.NativeFunction(&jsonnet.NativeFunction{
+			Name:   "secret",
+			Params: []ast.Identifier{"name"},
+			Func: func(args []any) (any, error) {
+				name, ok := args[0].(string)
+				if !ok {
 					return nil, fmt.Errorf("secret: name must be string")
 				}
-				return fetchSecret(name)
+				return deprecatedSecretFunc(name)
 			},
 		})
 	}
