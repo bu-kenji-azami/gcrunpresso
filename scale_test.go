@@ -65,7 +65,7 @@ func TestScaleRequiresMinOrMax(t *testing.T) {
 	}
 }
 
-func TestScalePinnedTrafficWarningAndShiftToLatest(t *testing.T) {
+func TestScalePinnedTrafficIsPreservedWithoutShifting(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 

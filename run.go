@@ -215,9 +215,10 @@ func BuildJobOverrides(opt RunOption) (*runpb.RunJobRequest_Overrides, error) {
 }
 
 const (
-	// maxNotFoundPolls bounds how long monitorExecution tolerates a NotFound execution
-	// before concluding the resolved path is wrong. At the 3s poll interval this is ~15s,
-	// enough to absorb post-RunJob eventual consistency without burning the full timeout.
+	// maxNotFoundPolls bounds how long monitorExecution tolerates consecutive NotFound
+	// responses before concluding the resolved path is wrong. At the 3s poll interval
+	// this is ~15s, enough to absorb post-RunJob eventual consistency without burning
+	// the full timeout.
 	maxNotFoundPolls = 5
 
 	// maxConsecutivePollErrors bounds any run of consecutive failed status polls,
@@ -237,6 +238,7 @@ func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 
 	d.LogInfo("monitoring job execution status", "path", execPath)
 
+	notFoundPolls := 0
 	errPolls := 0
 
 	for {
@@ -253,20 +255,28 @@ func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 					return fmt.Errorf("fatal authentication or permission error polling execution %s: %w", execPath, err)
 				}
 				// Bound consecutive failures so persistent breakage surfaces with its
-				// real cause rather than burning the whole timeout. A freshly triggered
-				// execution can briefly 404 -- maxNotFoundPolls absorbs that window;
-				// other errors get a wider budget for transient blips.
+				// real cause rather than burning the whole timeout. The two bounds are
+				// counted separately: a freshly triggered execution can briefly 404 and
+				// maxNotFoundPolls absorbs that window, while errors of any kind get the
+				// wider maxConsecutivePollErrors budget. One shared counter would let a
+				// few transient blips carry an ordinary 404 past the NotFound bound and
+				// misreport a correct execution path as wrong.
 				errPolls++
 				if isNotFoundError(err) {
-					if errPolls >= maxNotFoundPolls {
-						return fmt.Errorf("execution %s not found after %d polls, the resolved execution path may be wrong: %w", execPath, errPolls, err)
-					}
-				} else if errPolls >= maxConsecutivePollErrors {
+					notFoundPolls++
+				} else {
+					notFoundPolls = 0
+				}
+				if notFoundPolls >= maxNotFoundPolls {
+					return fmt.Errorf("execution %s not found after %d polls, the resolved execution path may be wrong: %w", execPath, notFoundPolls, err)
+				}
+				if errPolls >= maxConsecutivePollErrors {
 					return fmt.Errorf("failed to poll execution %s %d consecutive times: %w", execPath, errPolls, err)
 				}
 				d.LogWarn("failed to poll execution status, retrying", "error", err, "consecutive_failures", errPolls)
 				continue
 			}
+			notFoundPolls = 0
 			errPolls = 0
 
 			// Check conditions

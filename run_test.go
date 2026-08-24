@@ -173,8 +173,12 @@ func (f *fakeJobRunOperation) Poll(ctx context.Context) (*runpb.Execution, error
 }
 
 type mockRunExecutionsAPI struct {
-	exec             *runpb.Execution
-	getExecutionErr  error
+	exec            *runpb.Execution
+	getExecutionErr error
+	// errScript scripts the first len(errScript) calls, one entry per call, so tests
+	// can interleave error kinds; a nil entry succeeds. Later calls fall back to
+	// getExecutionErr. Set before the test runs and never mutated afterwards.
+	errScript        []error
 	expectedExecPath string // exact match; rejects fabricated ID-less paths
 
 	mu           sync.Mutex
@@ -184,8 +188,13 @@ type mockRunExecutionsAPI struct {
 func (m *mockRunExecutionsAPI) GetExecution(ctx context.Context, req *runpb.GetExecutionRequest, opts ...gax.CallOption) (*runpb.Execution, error) {
 	m.mu.Lock()
 	m.getExecCalls++
+	call := m.getExecCalls
 	m.mu.Unlock()
-	if m.getExecutionErr != nil {
+	if call <= len(m.errScript) {
+		if err := m.errScript[call-1]; err != nil {
+			return nil, err
+		}
+	} else if m.getExecutionErr != nil {
 		return nil, m.getExecutionErr
 	}
 	if m.expectedExecPath != "" && req.Name != m.expectedExecPath {
@@ -453,5 +462,55 @@ func TestMonitorExecutionNotFoundBoundStillApplies(t *testing.T) {
 	}
 	if calls := mockExecs.getExecCallCount(); calls > 6 {
 		t.Errorf("expected NotFound bound at 5 polls, got %d calls", calls)
+	}
+}
+
+// A run of transient errors must not carry an ordinary post-RunJob 404 past the
+// NotFound bound: that bound diagnoses a wrong execution path, and reporting it
+// for a correct path sends the operator after the wrong problem. maxNotFoundPolls
+// counts consecutive NotFound responses only, so the 404 below is the first one.
+func TestMonitorExecutionTransientErrorsDoNotTripNotFoundBound(t *testing.T) {
+	prev := *gcrunpresso.ExecutionPollInterval
+	*gcrunpresso.ExecutionPollInterval = 5 * time.Millisecond
+	defer func() { *gcrunpresso.ExecutionPollInterval = prev }()
+
+	jobPath := "projects/p/locations/l/jobs/my-job"
+	unavailable := status.Error(codes.Unavailable, "backend unavailable")
+	mockExecs := &mockRunExecutionsAPI{
+		expectedExecPath: jobPath + "/executions/run-1",
+		errScript: []error{
+			unavailable,
+			unavailable,
+			unavailable,
+			unavailable,
+			status.Error(codes.NotFound, "execution not found"),
+		},
+		exec: &runpb.Execution{
+			Name:           jobPath + "/executions/run-1",
+			SucceededCount: 1,
+			TaskCount:      1,
+			Conditions: []*runpb.Condition{
+				{Type: "Completed", State: runpb.Condition_CONDITION_SUCCEEDED},
+			},
+		},
+	}
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "p",
+		Location: "l",
+		Job:      "my-job",
+	},
+		gcrunpresso.WithJobsClient(&mockRunJobsAPI{expectedJobPath: jobPath}),
+		gcrunpresso.WithExecutionsClient(mockExecs),
+		gcrunpresso.WithTasksClient(&mockRunTasksAPI{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	if err := app.Run(t.Context(), gcrunpresso.RunOption{Wait: true}); err != nil {
+		t.Fatalf("transient errors followed by a single 404 must not fail the run: %v", err)
+	}
+	if calls := mockExecs.getExecCallCount(); calls != 6 {
+		t.Errorf("expected the 6th poll to observe the execution, got %d calls", calls)
 	}
 }
