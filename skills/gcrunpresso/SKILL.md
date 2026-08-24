@@ -57,8 +57,8 @@ gcrunpresso rollback --revert-service
 
 ### Scaling a Service
 ```bash
-# Adjust min/max instances. Creates a new revision and preserves the traffic table:
-# a revision-pinned share stays put, but a LATEST share moves to the new revision.
+# Adjust min/max instances. Creates a new revision; LATEST shares are pinned to the
+# pre-scale latest-ready revision so routing stays unchanged.
 gcrunpresso scale --min 2 --max 20
 ```
 

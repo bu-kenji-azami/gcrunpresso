@@ -241,7 +241,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 			remote: &runpb.Job{
 				Template: &runpb.ExecutionTemplate{
 					Template: &runpb.TaskTemplate{
-						Retries: &runpb.TaskTemplate_MaxRetries{MaxRetries: 3},
+						Retries: &runpb.TaskTemplate_MaxRetries{MaxRetries: 5},
 					},
 				},
 			},
@@ -259,7 +259,7 @@ func TestValidateJobSafetyGuards(t *testing.T) {
 			name: "Timeout",
 			remote: &runpb.Job{
 				Template: &runpb.ExecutionTemplate{
-					Template: &runpb.TaskTemplate{Timeout: &durationpb.Duration{Seconds: 600}},
+					Template: &runpb.TaskTemplate{Timeout: &durationpb.Duration{Seconds: 900}},
 				},
 			},
 			localOmit: &runpb.Job{Template: &runpb.ExecutionTemplate{Template: &runpb.TaskTemplate{}}},
@@ -377,4 +377,61 @@ func TestValidateJobSafetyGuardsGALaunchStageIsNotAViolation(t *testing.T) {
 	if err := gcrunpresso.ValidateJobSafetyGuards(remote, local); err != nil {
 		t.Errorf("GA launch_stage omitted locally must not trip the guard, got: %v", err)
 	}
+}
+
+// Cloud Run fills server-side defaults into read responses for several template
+// fields -- proto docs: task_count "Defaults to 1", max_retries "Defaults to 3",
+// timeout "Defaults to 600 seconds", service_account "the project's default
+// service account". A manifest omitting them is the normal case and must not
+// trip the safety guards; this is the same failure mode launch_stage had.
+func TestValidateJobSafetyGuardsAPIDefaultsAreNotViolations(t *testing.T) {
+	defaultFilledJob := func() *runpb.Job {
+		return &runpb.Job{
+			Name: "projects/123456789/locations/asia-northeast1/jobs/my-job",
+			Template: &runpb.ExecutionTemplate{
+				TaskCount: 1,
+				Template: &runpb.TaskTemplate{
+					ServiceAccount: "123456789-compute@developer.gserviceaccount.com",
+					Retries:        &runpb.TaskTemplate_MaxRetries{MaxRetries: 3},
+					Timeout:        &durationpb.Duration{Seconds: 600},
+				},
+			},
+		}
+	}
+
+	t.Run("all documented API defaults filled by the server", func(t *testing.T) {
+		if err := gcrunpresso.ValidateJobSafetyGuards(defaultFilledJob(), &runpb.Job{}); err != nil {
+			t.Errorf("API-reported defaults omitted locally must not trip any guard, got: %v", err)
+		}
+	})
+
+	t.Run("compute default service account alone", func(t *testing.T) {
+		remote := &runpb.Job{
+			Name: "projects/123456789/locations/asia-northeast1/jobs/my-job",
+			Template: &runpb.ExecutionTemplate{
+				Template: &runpb.TaskTemplate{ServiceAccount: "123456789-compute@developer.gserviceaccount.com"},
+			},
+		}
+		if err := gcrunpresso.ValidateJobSafetyGuards(remote, &runpb.Job{}); err != nil {
+			t.Errorf("default compute SA omitted locally must not trip the guard, got: %v", err)
+		}
+	})
+
+	t.Run("custom service account is still guarded", func(t *testing.T) {
+		remote := defaultFilledJob()
+		remote.Template.Template.ServiceAccount = "custom@proj.iam.gserviceaccount.com"
+		err := gcrunpresso.ValidateJobSafetyGuards(remote, &runpb.Job{})
+		if err == nil || !strings.Contains(err.Error(), "service_account") {
+			t.Errorf("expected service_account guard for non-default SA, got: %v", err)
+		}
+	})
+
+	t.Run("unparsable job name keeps the SA guard armed", func(t *testing.T) {
+		remote := defaultFilledJob()
+		remote.Name = ""
+		err := gcrunpresso.ValidateJobSafetyGuards(remote, &runpb.Job{})
+		if err == nil || !strings.Contains(err.Error(), "service_account") {
+			t.Errorf("expected conservative firing when the project cannot be derived, got: %v", err)
+		}
+	})
 }

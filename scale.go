@@ -56,9 +56,10 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 		Template: template,
 	}
 
-	// Traffic handling: scale only adjusts instance scaling and should never accidentally
-	// promote traffic. Note that preserving the table verbatim does NOT hold traffic still
-	// if it contains a LATEST target -- LATEST resolves to the newly created revision.
+	// Traffic handling: scale only adjusts instance scaling and must never shift
+	// traffic. Updating the template creates a new revision and a LATEST target
+	// would follow it -- so LATEST allocations are pinned to the current
+	// latest-ready revision before the table is sent back.
 	isPinned := false
 	hasLatest := false
 	for _, t := range remoteSvc.Traffic {
@@ -77,13 +78,18 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 
 	if opt.NoTraffic || isPinned {
 		if len(remoteSvc.Traffic) > 0 {
-			svcUpdate.Traffic = remoteSvc.Traffic
+			svcUpdate.Traffic = pinLatestTargets(remoteSvc.Traffic, remoteSvc.LatestReadyRevision)
 			updateMaskPaths = append(updateMaskPaths, "traffic")
 		}
-		if isPinned && hasLatest {
-			d.LogWarn("remote service traffic mixes pinned revisions with a LATEST target; the revision-pinned share is preserved, but the LATEST share will move to the newly created revision. Use deploy --traffic to control routing explicitly")
-		} else if isPinned {
-			d.LogWarn("remote service traffic is pinned to specific revision(s); scaling applied to new revision but traffic allocation is preserved and not shifted to latest")
+		if hasLatest {
+			if remoteSvc.LatestReadyRevision == "" {
+				d.LogWarn("latest-ready revision unknown; LATEST target sent verbatim and will follow the revision created by scale")
+			} else {
+				d.LogInfo("LATEST traffic share pinned to current latest-ready revision; routing is unchanged by scale", "pinned_to", remoteSvc.LatestReadyRevision)
+			}
+		}
+		if isPinned && !hasLatest {
+			d.LogInfo("traffic is pinned to specific revision(s); preserved as-is while the revision created by scale receives no traffic")
 		}
 	}
 
@@ -113,12 +119,29 @@ func (d *App) Scale(ctx context.Context, opt ScaleOption) error {
 	if err != nil {
 		return err
 	}
-	if isPinned && hasLatest {
-		d.LogInfo("service scaling updated for new revision (note: the LATEST share of traffic now points at this new revision; use deploy --traffic to control routing)", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
-	} else if isPinned {
-		d.LogInfo("service scaling updated for new revision (note: traffic remains pinned to existing revision; use deploy or rollback to adjust traffic)", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
-	} else {
-		d.LogInfo("service scaled successfully", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
-	}
+	d.LogInfo("service scaled successfully", "service", readySvc.Name, "latest_ready_revision", readySvc.LatestReadyRevision)
 	return nil
+}
+
+// pinLatestTargets rewrites LATEST allocations to explicit REVISION targets bound
+// to latestReady, keeping percentages and tags, so a template update triggered by
+// scale cannot pull those shares onto the newly created revision. When latestReady
+// is unknown the table is returned unchanged.
+func pinLatestTargets(targets []*runpb.TrafficTarget, latestReady string) []*runpb.TrafficTarget {
+	if latestReady == "" {
+		return targets
+	}
+	pinned := make([]*runpb.TrafficTarget, 0, len(targets))
+	for _, t := range targets {
+		if t != nil && t.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST {
+			t = &runpb.TrafficTarget{
+				Type:     runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION,
+				Revision: latestReady,
+				Percent:  t.Percent,
+				Tag:      t.Tag,
+			}
+		}
+		pinned = append(pinned, t)
+	}
+	return pinned
 }

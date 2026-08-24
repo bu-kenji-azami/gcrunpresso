@@ -116,3 +116,104 @@ func TestScalePinnedTrafficWarningAndShiftToLatest(t *testing.T) {
 		t.Errorf("expected traffic to preserve pinned revision rev-pinned-1, got %v", updatedTraffic)
 	}
 }
+
+func TestScaleMixedTrafficTablePinsLatestShare(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	mockSvc := &runpb.Service{
+		Name:                "projects/p/locations/l/services/s",
+		LatestReadyRevision: "rev-current-latest",
+		Traffic: []*runpb.TrafficTarget{
+			{
+				Type:     runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION,
+				Revision: "rev-pinned-1",
+				Percent:  80,
+			},
+			{
+				Type:    runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST,
+				Percent: 20,
+			},
+		},
+		Conditions: []*runpb.Condition{
+			{Type: "Ready", State: runpb.Condition_CONDITION_SUCCEEDED},
+		},
+	}
+	mockClient := &mockServicesAPI{svc: mockSvc}
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "p",
+		Location: "l",
+		Service:  "s",
+	}, gcrunpresso.WithServicesClient(mockClient))
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+	app.SetLogger(logger)
+
+	minVal := int32(2)
+	if err := app.Scale(t.Context(), gcrunpresso.ScaleOption{Min: &minVal}); err != nil {
+		t.Fatalf("unexpected error during Scale: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "routing is unchanged by scale") {
+		t.Errorf("expected unchanged-routing log for mixed table, got: %s", buf.String())
+	}
+
+	updated := mockClient.lastUpdateReq.GetService().GetTraffic()
+	if len(updated) != 2 {
+		t.Fatalf("expected 2 traffic targets after pinning, got %d: %v", len(updated), updated)
+	}
+	if updated[0].Type != runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION ||
+		updated[0].Revision != "rev-pinned-1" || updated[0].Percent != 80 {
+		t.Errorf("pinned share must be preserved verbatim, got %+v", updated[0])
+	}
+	if updated[1].Type != runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION ||
+		updated[1].Revision != "rev-current-latest" || updated[1].Percent != 20 {
+		t.Errorf("LATEST share must be pinned to pre-scale latest-ready revision, got %+v", updated[1])
+	}
+	for _, tt := range updated {
+		if tt.Type == runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST {
+			t.Errorf("no LATEST target may remain after pinning, got %+v", tt)
+		}
+	}
+}
+
+func TestScaleNoTrafficPinsLatestOnlyTable(t *testing.T) {
+	mockSvc := &runpb.Service{
+		Name:                "projects/p/locations/l/services/s",
+		LatestReadyRevision: "rev-current-latest",
+		Traffic: []*runpb.TrafficTarget{
+			{
+				Type:    runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST,
+				Percent: 100,
+			},
+		},
+		Conditions: []*runpb.Condition{
+			{Type: "Ready", State: runpb.Condition_CONDITION_SUCCEEDED},
+		},
+	}
+	mockClient := &mockServicesAPI{svc: mockSvc}
+
+	app, err := gcrunpresso.New(t.Context(), &gcrunpresso.Option{
+		Project:  "p",
+		Location: "l",
+		Service:  "s",
+	}, gcrunpresso.WithServicesClient(mockClient))
+	if err != nil {
+		t.Fatalf("failed to create App: %v", err)
+	}
+
+	minVal := int32(2)
+	noTraffic := true
+	if err := app.Scale(t.Context(), gcrunpresso.ScaleOption{Min: &minVal, NoTraffic: noTraffic}); err != nil {
+		t.Fatalf("unexpected error during Scale: %v", err)
+	}
+
+	updated := mockClient.lastUpdateReq.GetService().GetTraffic()
+	if len(updated) != 1 ||
+		updated[0].Type != runpb.TrafficTargetAllocationType_TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION ||
+		updated[0].Revision != "rev-current-latest" || updated[0].Percent != 100 {
+		t.Fatalf("--no-traffic must pin a LATEST-only table to the current latest-ready revision, got %v", updated)
+	}
+}

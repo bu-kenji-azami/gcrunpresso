@@ -132,7 +132,7 @@ func (m *mockInitJobsAPI) UpdateJob(ctx context.Context, req *runpb.UpdateJobReq
 func (m *mockInitJobsAPI) DeleteJob(ctx context.Context, req *runpb.DeleteJobRequest, opts ...gax.CallOption) (*run.DeleteJobOperation, error) {
 	return nil, nil
 }
-func (m *mockInitJobsAPI) RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (*run.RunJobOperation, error) {
+func (m *mockInitJobsAPI) RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (gcrunpresso.JobRunOperation, error) {
 	return nil, nil
 }
 

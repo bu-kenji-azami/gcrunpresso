@@ -272,12 +272,10 @@ Scale Service min and max instances without rewriting the local manifest.
 gcrunpresso scale --min 2 --max 20
 ```
 
-> **Note:** Updating instance scaling creates a new Cloud Run revision, and the existing traffic
-> table is preserved as-is. A revision-pinned share stays on its revision, so the new revision
-> receives no traffic. But a `LATEST` share always resolves to the newest ready revision, so if
-> your traffic table mixes the two (e.g. `--traffic "latest=20,web-api-00001=80"`), that `LATEST`
-> portion **will** move to the revision `scale` just created. Use `deploy --traffic` to control
-> routing explicitly.
+> **Note:** Updating instance scaling creates a new Cloud Run revision. The existing traffic
+> table is preserved and `LATEST` shares are pinned to the pre-scale latest-ready revision,
+> so the revision created by `scale` receives no traffic and routing is unchanged. To move
+> traffic onto the new revision, use `deploy --traffic`.
 
 ### `status`
 Display detailed service or job health, active URLs, traffic distribution, and conditions.

@@ -10,7 +10,6 @@ import (
 
 	loggingpb "cloud.google.com/go/logging/apiv2/loggingpb"
 	"cloud.google.com/go/logging/logadmin"
-	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/fatih/color"
 	"google.golang.org/api/iterator"
@@ -215,18 +214,30 @@ func BuildJobOverrides(opt RunOption) (*runpb.RunJobRequest_Overrides, error) {
 	return overrides, nil
 }
 
-// maxNotFoundPolls bounds how long monitorExecution tolerates a NotFound execution
-// before concluding the resolved path is wrong. At the 3s poll interval this is ~15s,
-// enough to absorb post-RunJob eventual consistency without burning the full timeout.
-const maxNotFoundPolls = 5
+const (
+	// maxNotFoundPolls bounds how long monitorExecution tolerates a NotFound execution
+	// before concluding the resolved path is wrong. At the 3s poll interval this is ~15s,
+	// enough to absorb post-RunJob eventual consistency without burning the full timeout.
+	maxNotFoundPolls = 5
+
+	// maxConsecutivePollErrors bounds any run of consecutive failed status polls,
+	// regardless of error type. At the 3s poll interval this is ~30s of tolerance
+	// for transient API errors before surfacing the underlying failure instead of
+	// retrying until the context deadline reduces everything to "timeout or canceled".
+	maxConsecutivePollErrors = 10
+)
+
+// executionPollInterval is monitorExecution's polling period. A variable so tests
+// can shrink it; tests changing it must restore the default and avoid t.Parallel().
+var executionPollInterval = 3 * time.Second
 
 func (d *App) monitorExecution(ctx context.Context, execPath string) error {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(executionPollInterval)
 	defer ticker.Stop()
 
 	d.LogInfo("monitoring job execution status", "path", execPath)
 
-	notFoundPolls := 0
+	errPolls := 0
 
 	for {
 		select {
@@ -241,20 +252,22 @@ func (d *App) monitorExecution(ctx context.Context, execPath string) error {
 				if isPermissionError(err) {
 					return fmt.Errorf("fatal authentication or permission error polling execution %s: %w", execPath, err)
 				}
-				// A freshly triggered execution can briefly 404, but a path that stays
-				// NotFound is wrong and would otherwise burn the whole timeout.
+				// Bound consecutive failures so persistent breakage surfaces with its
+				// real cause rather than burning the whole timeout. A freshly triggered
+				// execution can briefly 404 -- maxNotFoundPolls absorbs that window;
+				// other errors get a wider budget for transient blips.
+				errPolls++
 				if isNotFoundError(err) {
-					notFoundPolls++
-					if notFoundPolls >= maxNotFoundPolls {
-						return fmt.Errorf("execution %s not found after %d polls, the resolved execution path may be wrong: %w", execPath, notFoundPolls, err)
+					if errPolls >= maxNotFoundPolls {
+						return fmt.Errorf("execution %s not found after %d polls, the resolved execution path may be wrong: %w", execPath, errPolls, err)
 					}
-				} else {
-					notFoundPolls = 0
+				} else if errPolls >= maxConsecutivePollErrors {
+					return fmt.Errorf("failed to poll execution %s %d consecutive times: %w", execPath, errPolls, err)
 				}
-				d.LogWarn("failed to poll execution status, retrying", "error", err)
+				d.LogWarn("failed to poll execution status, retrying", "error", err, "consecutive_failures", errPolls)
 				continue
 			}
-			notFoundPolls = 0
+			errPolls = 0
 
 			// Check conditions
 			if !exec.Reconciling {
@@ -410,17 +423,10 @@ func extractPayload(entry *loggingpb.LogEntry) string {
 }
 
 // resolveExecutionPath extracts or polls the execution name from a RunJob operation.
-func resolveExecutionPath(ctx context.Context, op *run.RunJobOperation, jobResourcePath string) (execPath string, err error) {
+func resolveExecutionPath(ctx context.Context, op JobRunOperation, jobResourcePath string) (string, error) {
 	if op == nil {
 		return "", fmt.Errorf("operation is nil")
 	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			execPath = fmt.Sprintf("%s/executions", jobResourcePath)
-			err = nil
-		}
-	}()
 
 	if md, err := op.Metadata(); err == nil && md != nil && strings.Contains(md.Name, "/executions/") {
 		return md.Name, nil
@@ -435,18 +441,15 @@ func resolveExecutionPath(ctx context.Context, op *run.RunJobOperation, jobResou
 	for {
 		select {
 		case <-pollCtx.Done():
-			opName := ""
-			func() {
-				defer func() { _ = recover() }()
-				opName = op.Name()
-			}()
-			if strings.Contains(opName, "/executions/") {
-				return opName, nil
+			// A live operation always carries a name; if polling never exposed an
+			// execution-bearing path we genuinely failed to resolve one. Returning
+			// an error beats fabricating a path whose only outcome is an opaque
+			// NotFound several seconds later.
+			name := op.Name()
+			if strings.Contains(name, "/executions/") {
+				return name, nil
 			}
-			if opName != "" {
-				return fmt.Sprintf("%s/executions/%s", jobResourcePath, arnToName(opName)), nil
-			}
-			return fmt.Sprintf("%s/executions", jobResourcePath), nil
+			return "", fmt.Errorf("execution name not available from operation %q within %s of polling", name, 10*time.Second)
 		case <-ticker.C:
 			if md, err := op.Metadata(); err == nil && md != nil && strings.Contains(md.Name, "/executions/") {
 				return md.Name, nil

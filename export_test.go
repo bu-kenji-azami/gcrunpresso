@@ -18,6 +18,7 @@ var (
 	ValidateJobSafetyGuards = validateJobSafetyGuards
 	ExitCodeFromError       = exitCodeFromError
 	ResolveExecutionPath    = resolveExecutionPath
+	ExecutionPollInterval   = &executionPollInterval
 )
 
 func (d *App) SetLogger(logger *slog.Logger) {

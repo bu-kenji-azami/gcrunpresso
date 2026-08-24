@@ -33,7 +33,17 @@ type JobsAPI interface {
 	CreateJob(ctx context.Context, req *runpb.CreateJobRequest, opts ...gax.CallOption) (*run.CreateJobOperation, error)
 	UpdateJob(ctx context.Context, req *runpb.UpdateJobRequest, opts ...gax.CallOption) (*run.UpdateJobOperation, error)
 	DeleteJob(ctx context.Context, req *runpb.DeleteJobRequest, opts ...gax.CallOption) (*run.DeleteJobOperation, error)
-	RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (*run.RunJobOperation, error)
+	RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (JobRunOperation, error)
+}
+
+// JobRunOperation abstracts the long-running operation returned by JobsAPI.RunJob.
+// The run command only needs the operation's Name, Metadata and Poll to resolve the
+// execution path; exposing just those lets tests provide working fakes instead of
+// zero-value operations whose internal clients panic on use.
+type JobRunOperation interface {
+	Name() string
+	Metadata() (*runpb.Execution, error)
+	Poll(ctx context.Context) (*runpb.Execution, error)
 }
 
 type TasksAPI interface {
@@ -57,6 +67,40 @@ type SecretManagerAPI interface {
 type ArtifactRegistryAPI interface {
 	GetRepository(ctx context.Context, req *artifactregistrypb.GetRepositoryRequest, opts ...gax.CallOption) (*artifactregistrypb.Repository, error)
 	GetDockerImage(ctx context.Context, req *artifactregistrypb.GetDockerImageRequest, opts ...gax.CallOption) (*artifactregistrypb.DockerImage, error)
+}
+
+// jobsClientAdapter adapts the GAPIC jobs client to JobsAPI, wrapping the RunJob
+// long-running operation in JobRunOperation so execution-path resolution can be
+// tested without a live operation.
+type jobsClientAdapter struct {
+	*run.JobsClient
+}
+
+func (a *jobsClientAdapter) RunJob(ctx context.Context, req *runpb.RunJobRequest, opts ...gax.CallOption) (JobRunOperation, error) {
+	if a == nil || a.JobsClient == nil {
+		return nil, fmt.Errorf("jobs client is not initialized")
+	}
+	op, err := a.JobsClient.RunJob(ctx, req, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &gapicJobRunOperation{op: op}, nil
+}
+
+// gapicJobRunOperation delegates JobRunOperation to the GAPIC RunJobOperation,
+// trimming its variadic gax.CallOption so the narrow interface stays mockable.
+type gapicJobRunOperation struct {
+	op *run.RunJobOperation
+}
+
+func (g *gapicJobRunOperation) Name() string { return g.op.Name() }
+
+func (g *gapicJobRunOperation) Metadata() (*runpb.Execution, error) {
+	return g.op.Metadata()
+}
+
+func (g *gapicJobRunOperation) Poll(ctx context.Context) (*runpb.Execution, error) {
+	return g.op.Poll(ctx)
 }
 
 type tasksClientAdapter struct {
@@ -252,7 +296,7 @@ func New(ctx context.Context, opt *Option, appOpts ...AppOption) (*App, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create run jobs client: %w", err)
 		}
-		app.jobsClient = c
+		app.jobsClient = &jobsClientAdapter{JobsClient: c}
 		app.closers = append(app.closers, c)
 	}
 

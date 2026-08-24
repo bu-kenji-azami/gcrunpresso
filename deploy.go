@@ -274,8 +274,10 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 			return fmt.Errorf("safety guard violation: remote Job has template.annotations configured, but rendered manifest omits 'template.annotations'. Please declare template.annotations in job.yaml to prevent metadata reset")
 		}
 
-		// 7. TaskCount
-		if remote.Template.TaskCount > 0 && locExec.TaskCount == 0 {
+		// 7. TaskCount -- proto documents ExecutionTemplate.task_count as
+		// "Defaults to 1" and Cloud Run reports the effective value on read,
+		// so a read-back of the server default must not look like deliberate config.
+		if remote.Template.TaskCount > 1 && locExec.TaskCount == 0 {
 			return fmt.Errorf("safety guard violation: remote Job has task_count=%d configured, but rendered manifest omits 'template.task_count'", remote.Template.TaskCount)
 		}
 
@@ -291,8 +293,12 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 				locTask = &runpb.TaskTemplate{}
 			}
 
-			// 9. ServiceAccount
-			if remTask.ServiceAccount != "" && locTask.ServiceAccount == "" {
+			// 9. ServiceAccount -- when unset the task uses the project's default
+			// service account (proto), which read responses may fill back in.
+			// Treating that computed default as unconfigured keeps ordinary deploys
+			// from being blocked while custom accounts still trip the guard.
+			if remTask.ServiceAccount != "" && locTask.ServiceAccount == "" &&
+				!isDefaultComputeServiceAccount(remote.Name, remTask.ServiceAccount) {
 				return fmt.Errorf("safety guard violation: remote Job has service_account=%s configured, but rendered manifest omits 'template.template.service_account'. Please declare service_account in job.yaml to prevent fallback to default compute SA", remTask.ServiceAccount)
 			}
 
@@ -306,13 +312,17 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 				return fmt.Errorf("safety guard violation: remote Job has encryption_key (CMEK) configured, but rendered manifest omits 'template.template.encryption_key'. Please declare encryption_key in job.yaml to prevent downgrade to Google-managed key")
 			}
 
-			// 12. Retries (oneof TaskTemplate_MaxRetries)
-			if remTask.Retries != nil && locTask.Retries == nil {
+			// 12. Retries (oneof TaskTemplate_MaxRetries) -- proto documents
+			// "Defaults to 3"; the reported default is indistinguishable from
+			// unset intent, so only a non-default value trips the guard.
+			if r, ok := remTask.Retries.(*runpb.TaskTemplate_MaxRetries); ok && r.MaxRetries != 3 && locTask.Retries == nil {
 				return fmt.Errorf("safety guard violation: remote Job has max_retries configured, but rendered manifest omits 'template.template.max_retries'")
 			}
 
-			// 13. Timeout
-			if remTask.Timeout != nil && locTask.Timeout == nil {
+			// 13. Timeout -- proto documents "Defaults to 600 seconds"; a read-back
+			// of that default must not block deploys whose manifest omits timeout.
+			if remTask.Timeout != nil && locTask.Timeout == nil &&
+				!(remTask.Timeout.Seconds == 600 && remTask.Timeout.Nanos == 0) {
 				return fmt.Errorf("safety guard violation: remote Job has timeout configured, but rendered manifest omits 'template.template.timeout'")
 			}
 
@@ -354,6 +364,22 @@ func isPreviewLaunchStage(stage api.LaunchStage) bool {
 	default:
 		return false
 	}
+}
+
+// isDefaultComputeServiceAccount reports whether sa is the project's default
+// compute service account (<project>-compute@developer.gserviceaccount.com),
+// derived from the job's resource name. Names we cannot parse never match, so
+// unparsable cases stay conservative and keep the guard armed.
+func isDefaultComputeServiceAccount(jobName, sa string) bool {
+	rest, ok := strings.CutPrefix(jobName, "projects/")
+	if !ok {
+		return false
+	}
+	project, _, found := strings.Cut(rest, "/")
+	if !found || project == "" {
+		return false
+	}
+	return sa == project+"-compute@developer.gserviceaccount.com"
 }
 
 func validateServiceSafetyGuards(remote, local *runpb.Service) error {
