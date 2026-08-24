@@ -426,12 +426,24 @@ func TestValidateJobSafetyGuardsAPIDefaultsAreNotViolations(t *testing.T) {
 		}
 	})
 
-	t.Run("unparsable job name keeps the SA guard armed", func(t *testing.T) {
+	// Job.name carries "either project id or number" (proto), while the default
+	// compute service account always carries the project number. Recognising the
+	// default must not depend on the two agreeing, or every deploy omitting
+	// service_account is blocked whenever the project is configured by id.
+	t.Run("project id in the job name still recognizes the default SA", func(t *testing.T) {
 		remote := defaultFilledJob()
-		remote.Name = ""
+		remote.Name = "projects/my-project-id/locations/asia-northeast1/jobs/my-job"
+		if err := gcrunpresso.ValidateJobSafetyGuards(remote, &runpb.Job{}); err != nil {
+			t.Errorf("default compute SA must be recognized regardless of how the project is named, got: %v", err)
+		}
+	})
+
+	t.Run("non-numeric account in the developer domain is still guarded", func(t *testing.T) {
+		remote := defaultFilledJob()
+		remote.Template.Template.ServiceAccount = "my-app-compute@developer.gserviceaccount.com"
 		err := gcrunpresso.ValidateJobSafetyGuards(remote, &runpb.Job{})
 		if err == nil || !strings.Contains(err.Error(), "service_account") {
-			t.Errorf("expected conservative firing when the project cannot be derived, got: %v", err)
+			t.Errorf("only the project-number-shaped default may bypass the guard, got: %v", err)
 		}
 	})
 }

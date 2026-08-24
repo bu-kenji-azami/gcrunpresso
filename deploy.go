@@ -298,7 +298,7 @@ func validateJobSafetyGuards(remote, local *runpb.Job) error {
 			// Treating that computed default as unconfigured keeps ordinary deploys
 			// from being blocked while custom accounts still trip the guard.
 			if remTask.ServiceAccount != "" && locTask.ServiceAccount == "" &&
-				!isDefaultComputeServiceAccount(remote.Name, remTask.ServiceAccount) {
+				!isDefaultComputeServiceAccount(remTask.ServiceAccount) {
 				return fmt.Errorf("safety guard violation: remote Job has service_account=%s configured, but rendered manifest omits 'template.template.service_account'. Please declare service_account in job.yaml to prevent fallback to default compute SA", remTask.ServiceAccount)
 			}
 
@@ -366,20 +366,30 @@ func isPreviewLaunchStage(stage api.LaunchStage) bool {
 	}
 }
 
-// isDefaultComputeServiceAccount reports whether sa is the project's default
-// compute service account (<project>-compute@developer.gserviceaccount.com),
-// derived from the job's resource name. Names we cannot parse never match, so
-// unparsable cases stay conservative and keep the guard armed.
-func isDefaultComputeServiceAccount(jobName, sa string) bool {
-	rest, ok := strings.CutPrefix(jobName, "projects/")
-	if !ok {
+// isDefaultComputeServiceAccount reports whether sa is a project's default compute
+// service account, which Cloud Run may report on read when the task template omits
+// service_account.
+//
+// The address always carries the project number
+// (<project_number>-compute@developer.gserviceaccount.com), while a Job resource name
+// may carry "either project id or number" per the Job.name proto docs. Deriving the
+// project from the name would therefore fail to match whenever the project is
+// configured by id, re-arming the guard against every deploy that omits
+// service_account, so the match is on address shape alone. The
+// developer.gserviceaccount.com domain is reserved for Google-managed default
+// accounts -- user-created accounts live on <project>.iam.gserviceaccount.com -- so
+// this cannot mistake a deliberately configured account for the default.
+func isDefaultComputeServiceAccount(sa string) bool {
+	number, ok := strings.CutSuffix(sa, "-compute@developer.gserviceaccount.com")
+	if !ok || number == "" {
 		return false
 	}
-	project, _, found := strings.Cut(rest, "/")
-	if !found || project == "" {
-		return false
+	for _, r := range number {
+		if r < '0' || r > '9' {
+			return false
+		}
 	}
-	return sa == project+"-compute@developer.gserviceaccount.com"
+	return true
 }
 
 func validateServiceSafetyGuards(remote, local *runpb.Service) error {
